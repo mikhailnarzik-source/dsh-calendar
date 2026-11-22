@@ -300,8 +300,8 @@ window.__ModuleLoader__.load({
      * colour-mix of a token, so light and dark themes both stay readable.
      */
     const CSS = `
-.dsh-calendar-page{box-sizing:border-box;display:flex;width:100%;min-width:0;height:100%;min-height:0;overflow:hidden;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);font-size:13px;line-height:20px}
-.dsh-calendar-scroll{position:relative;flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable}
+.dsh-calendar-page{box-sizing:border-box;display:flex;width:100%;min-width:0;height:100%;max-height:100%;min-height:0;overflow:hidden;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);font-size:13px;line-height:20px}
+.dsh-calendar-scroll{position:relative;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .dsh-calendar-content{display:flex;flex-direction:column;gap:18px;box-sizing:border-box;width:100%;max-width:1000px;margin:0 auto;padding:0 clamp(18px,4vw,40px) 64px}
 .dsh-calendar-hero{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding-top:26px}
 .dsh-calendar-logo{display:inline-flex;flex:none;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent);color:var(--dsw-alias-brand-primary)}
@@ -450,7 +450,7 @@ window.__ModuleLoader__.load({
 .dsh-calendar-bar-value{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary);white-space:nowrap}
 .dsh-calendar-bar-track{height:7px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);overflow:hidden}
 .dsh-calendar-bar-fill{height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary)}
-.dsh-calendar-help{display:flex;flex-direction:column;gap:12px;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px}
+.dsh-calendar-help{display:flex;flex-direction:column;gap:12px;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px;min-height:0;max-height:100%;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;padding-bottom:12px}
 .dsh-calendar-help-card{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1)}
 .dsh-calendar-chip-wrap{position:fixed;right:22px;bottom:22px;z-index:2147483000;display:flex;pointer-events:none}
 .dsh-calendar-chip{position:relative;display:inline-flex;align-items:center;gap:9px;box-sizing:border-box;height:40px;padding:0 14px;border:1px solid color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2));border-radius:999px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 10px 28px rgba(15,23,42,.22);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;cursor:pointer;pointer-events:auto}
