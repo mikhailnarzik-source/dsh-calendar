@@ -95,6 +95,43 @@ function allOfType(node, type, found = []) {
   return found
 }
 
+/** Find every element whose className contains the given token. */
+function allByClass(node, token, found = []) {
+  if (node === null || node === undefined) return found
+  if (Array.isArray(node)) {
+    for (const item of node) allByClass(item, token, found)
+    return found
+  }
+  if (typeof node === 'object') {
+    if (typeof node.props?.className === 'string' && node.props.className.split(' ').includes(token)) found.push(node)
+    allByClass(node.props?.children, token, found)
+  }
+  return found
+}
+
+/**
+ * Body of one CSS rule from the stylesheet: `.selector{...}`.
+ * @param source - client.js source.
+ * @param selector - exact selector text, e.g. `.dsh-calendar-card`.
+ * @returns declarations between the braces.
+ */
+function cssRule(source, selector) {
+  const marker = `\n${selector}{`
+  const start = source.indexOf(marker)
+  assert.notEqual(start, -1, `в стилях есть правило ${selector}`)
+  const end = source.indexOf('}', start)
+  assert.notEqual(end, -1, `правило ${selector} закрыто`)
+  return source.slice(start + marker.length, end)
+}
+
+/** One CSS media block by its exact query. */
+function mediaBlock(source, query) {
+  const start = source.indexOf(`@media (${query}){`)
+  assert.notEqual(start, -1, `есть медиазапрос ${query}`)
+  const end = source.indexOf('\n', start)
+  return source.slice(start, end === -1 ? source.length : end)
+}
+
 /**
  * Load `client.js` the way the browser module loader does.
  * @param options - `{ layout }`: a fake `ctx.layout` navigation service.
@@ -392,6 +429,8 @@ test('client.js: полный снимок — строки таймлайна, 
   for (const text of ['Созвон', 'Код', 'важно', 'Работа', '20:00', '2', '1']) {
     assert.ok(labels.includes(text), `на странице есть «${text}»`)
   }
+  assert.equal(allByClass(tree, 'dsh-calendar-card-foot').length, 1, 'в карточке «Сегодня» есть футер с планом')
+  assert.ok(labels.join(' ').includes('dshCalendar.todayPlanned'), 'футер показывает запланированное время')
 
   const ringBar = allOfType(tree, 'circle').find(circle => typeof circle.props.strokeDasharray === 'string')
   const offset = Number.parseFloat(ringBar.props.strokeDashoffset)
@@ -502,4 +541,132 @@ test('client.js: стили используют токены темы, адап
   assert.match(source, /margin:0 auto/, 'контейнер выровнен по центру')
   assert.match(source, /border-radius:16px/, 'мягкие радиусы карточек')
   assert.equal(source.includes('\uFFFD'), false, 'нет битых символов')
+})
+
+test('client.js: сетка страницы — области «сегодня/таймер/отчёт/журнал» и stretch', async () => {
+  const source = await readFile(join(ROOT, 'client.js'), 'utf8')
+  const layout = cssRule(source, '.dsh-calendar-layout')
+  assert.match(layout, /display:grid/)
+  assert.match(layout, /grid-template-columns:minmax\(0,1.15fr\) minmax\(0,1fr\)/, 'колонки 1.15fr и 1fr')
+  assert.match(layout, /grid-template-areas:'today timer' 'report log'/, 'области строк: сегодня+таймер, отчёт+журнал')
+  assert.match(layout, /align-items:stretch/, 'карточки растягиваются на свою ячейку')
+  assert.match(layout, /gap:16px/)
+  assert.match(layout, /min-width:0/)
+  for (const [name, area] of [['today', 'today'], ['timer', 'timer'], ['report', 'report'], ['log', 'log']]) {
+    assert.match(cssRule(source, `.dsh-calendar-card-${name}`), new RegExp(`grid-area:${area}`), `карточка ${name} стоит в своей области`)
+  }
+  const card = cssRule(source, '.dsh-calendar-card')
+  for (const token of ['display:flex', 'flex-direction:column', 'height:100%', 'min-width:0']) {
+    assert.ok(card.includes(token), `карточка — flex-колонка на всю ячейку: ${token}`)
+  }
+  const head = cssRule(source, '.dsh-calendar-card-head')
+  assert.match(head, /min-height:38px/, 'заголовки одной высоты')
+  assert.match(head, /align-items:center/)
+
+  const { registered } = await loadClient()
+  const tree = render(slot(registered, 'main').component({}))
+  const layoutElement = allByClass(tree, 'dsh-calendar-layout')[0]
+  assert.ok(layoutElement !== undefined, 'на странице есть сетка')
+  const children = Array.isArray(layoutElement.props.children) ? layoutElement.props.children : [layoutElement.props.children]
+  assert.deepEqual(children.map(child => child.props.className), [
+    'dsh-calendar-card dsh-calendar-card-today',
+    'dsh-calendar-card dsh-calendar-card-timer',
+    'dsh-calendar-card dsh-calendar-card-report',
+    'dsh-calendar-card dsh-calendar-card-log',
+  ], 'четыре карточки лежат прямо в сетке: сегодня, таймер, отчёт, журнал')
+  assert.equal(source.includes('dsh-calendar-col'), false, 'колоночных обёрток больше нет')
+})
+
+test('client.js: карточки заполняют ячейку, футеры внизу, пустые состояния по центру', async () => {
+  const source = await readFile(join(ROOT, 'client.js'), 'utf8')
+  assert.match(cssRule(source, '.dsh-calendar-timeline'), /flex:1 1 auto/, 'таймлайн тянется на свободное место')
+  assert.match(cssRule(source, '.dsh-calendar-log'), /flex:1 1 auto/, 'журнал тянется на свободное место')
+  assert.match(cssRule(source, '.dsh-calendar-chart-block'), /flex:1 1 auto/, 'график тянется на свободное место')
+  assert.match(cssRule(source, '.dsh-calendar-chart'), /min-height:118px/, 'у графика есть минимальная высота')
+  assert.match(cssRule(source, '.dsh-calendar-timer-controls'), /margin-top:auto/, 'кнопки таймера прижаты к низу')
+  assert.match(cssRule(source, '.dsh-calendar-card-foot'), /margin-top:auto/, 'футер карточки прижат к низу')
+  assert.match(cssRule(source, '.dsh-calendar-primary'), /flex:1 1 auto/, 'главная кнопка растягивается по строке')
+  const empty = cssRule(source, '.dsh-calendar-empty')
+  for (const token of ['flex:1 1 auto', 'justify-content:center', 'text-align:center']) {
+    assert.ok(empty.includes(token), `пустое состояние заполняет место и центрирует содержимое: ${token}`)
+  }
+  assert.match(cssRule(source, '.dsh-calendar-empty-note'), /justify-content:center/)
+
+  const { registered } = await loadClient()
+  const tree = render(slot(registered, 'main').component({}))
+  const report = allByClass(tree, 'dsh-calendar-card-report')[0]
+  assert.equal(allByClass(report, 'dsh-calendar-chart-block').length, 1, 'график лежит в тянущемся блоке')
+  assert.equal(allByClass(report, 'dsh-calendar-empty-note').length >= 1, true, 'пустая подпись отчёта по центру')
+  const today = allByClass(tree, 'dsh-calendar-card-today')[0]
+  assert.equal(allByClass(today, 'dsh-calendar-empty').length, 1, 'пустой таймлайн — карточка пустого состояния')
+  const log = allByClass(tree, 'dsh-calendar-card-log')[0]
+  assert.equal(allByClass(log, 'dsh-calendar-empty').length, 1, 'пустой журнал — карточка пустого состояния')
+})
+
+test('client.js: кнопки — единая система из спецификации v2', async () => {
+  const source = await readFile(join(ROOT, 'client.js'), 'utf8')
+  const base = cssRule(source, '.dsh-calendar-button,.dsh-calendar-primary')
+  for (const token of [
+    'height:36px',
+    'padding:0 14px',
+    'border-radius:10px',
+    'font-size:12.5px',
+    'font-weight:600',
+    'line-height:1',
+    'gap:6px',
+    'align-items:center',
+    'justify-content:center',
+    'white-space:nowrap',
+  ]) {
+    assert.ok(base.includes(token), `общая геометрия кнопок: ${token}`)
+  }
+  const secondary = cssRule(source, '.dsh-calendar-button')
+  assert.match(secondary, /border:1px solid var\(--dsw-alias-border-l4\)/, 'secondary берёт рамку из токена')
+  assert.match(secondary, /background:transparent/)
+  assert.match(secondary, /color:var\(--dsw-alias-label-primary\)/)
+  assert.match(cssRule(source, '.dsh-calendar-button:hover:not(:disabled)'), /interactive-bg-hover/)
+
+  const primary = cssRule(source, '.dsh-calendar-button.is-primary,.dsh-calendar-primary')
+  assert.match(primary, /brand-primary\) 18%/, 'primary — мягкая заливка brand 18%')
+  assert.match(primary, /brand-primary\) 55%/, 'primary — рамка brand 55%')
+  assert.match(primary, /color:var\(--dsw-alias-brand-primary\)/, 'primary — текст brand')
+  assert.match(cssRule(source, '.dsh-calendar-button.is-primary:hover:not(:disabled),.dsh-calendar-primary:hover:not(:disabled)'), /brand-primary\) 28%/)
+
+  const danger = cssRule(source, '.dsh-calendar-button.is-danger')
+  assert.match(danger, /state-error-primary\) 16%/)
+  assert.match(danger, /state-error-primary\) 50%/)
+  assert.match(danger, /color:var\(--dsw-alias-state-error-primary\)/)
+
+  const segment = cssRule(source, '.dsh-calendar-seg-btn')
+  assert.match(segment, /height:32px/, 'сегменты одной высоты')
+  assert.match(segment, /font-weight:600/)
+  assert.match(cssRule(source, '.dsh-calendar-seg'), /padding:2px/)
+
+  const { registered } = await loadClient()
+  const tree = render(slot(registered, 'main').component({}))
+  const buttons = allOfType(tree, 'button')
+  const names = buttons.map(button => button.props.className)
+  assert.ok(names.includes('dsh-calendar-primary'), 'главная кнопка таймера — primary')
+  assert.ok(names.includes('dsh-calendar-button is-primary'), 'основные действия — primary')
+  assert.ok(names.filter(name => name === 'dsh-calendar-button').length >= 1, 'служебные кнопки — secondary')
+  for (const button of buttons) {
+    assert.equal(button.props.style?.height, undefined, 'высота кнопок задаётся стилем, а не инлайном')
+  }
+})
+
+test('client.js: адаптив — одна колонка до 980px и компактные отступы до 640px', async () => {
+  const source = await readFile(join(ROOT, 'client.js'), 'utf8')
+  const narrow = mediaBlock(source, 'max-width:980px')
+  assert.match(narrow, /grid-template-columns:minmax\(0,1fr\)/, 'до 980px одна колонка')
+  assert.match(narrow, /grid-template-areas:'today' 'timer' 'report' 'log'/, 'карточки идут по порядку')
+  const compact = mediaBlock(source, 'max-width:640px')
+  assert.match(compact, /\.dsh-calendar-content\{[^}]*padding:0 12px/, 'до 640px меньше отступ страницы')
+  assert.match(compact, /\.dsh-calendar-card\{[^}]*padding:12px/, 'до 640px меньше отступ карточек')
+  assert.match(compact, /\.dsh-calendar-layout\{[^}]*gap:12px/, 'до 640px меньше зазор сетки')
+  assert.match(compact, /\.dsh-calendar-card-head\{[^}]*min-height:36px/, 'заголовки компактнее')
+  const content = cssRule(source, '.dsh-calendar-content')
+  assert.match(content, /max-width:1000px/)
+  assert.match(content, /width:100%/)
+  assert.match(cssRule(source, '.dsh-calendar-page'), /overflow:hidden/)
+  assert.equal(/(^|;)width:/.test(cssRule(source, '.dsh-calendar-layout')), false, 'у сетки нет фиксированной ширины')
 })

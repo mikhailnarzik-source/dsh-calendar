@@ -79,6 +79,7 @@ window.__ModuleLoader__.load({
       todayCount: 'events:',
       doneCount: 'done:',
       doneOf: 'done',
+      todayPlanned: 'Planned:',
       noEvents: 'No events today. Add one in the form above.',
       addTitle: 'New event',
       titleLabel: 'Title',
@@ -197,6 +198,7 @@ window.__ModuleLoader__.load({
       todayCount: 'событий:',
       doneCount: 'выполнено:',
       doneOf: 'выполнено',
+      todayPlanned: 'Запланировано:',
       noEvents: 'На сегодня событий нет. Добавьте событие в форме выше.',
       addTitle: 'Новое событие',
       titleLabel: 'Название',
@@ -328,13 +330,17 @@ window.__ModuleLoader__.load({
 .dsh-calendar-stat.is-done .dsh-calendar-stat-icon{background:color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent);color:var(--dsw-alias-state-success-primary)}
 .dsh-calendar-stat.is-time .dsh-calendar-stat-icon{background:color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent);color:var(--dsw-alias-state-warn-primary)}
 .dsh-calendar-stat.is-count .dsh-calendar-stat-icon{background:color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent);color:var(--dsw-alias-label-primary)}
-.dsh-calendar-layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
-.dsh-calendar-col{display:flex;flex-direction:column;gap:16px;min-width:0}
-.dsh-calendar-card{display:flex;flex-direction:column;gap:12px;box-sizing:border-box;min-width:0;padding:16px;border:1px solid var(--dsw-alias-border-l1);border-radius:16px;background:var(--dsw-alias-bg-layer-1)}
-.dsh-calendar-card-head{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.dsh-calendar-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);grid-template-areas:'today timer' 'report log';gap:16px;align-items:stretch;min-width:0}
+.dsh-calendar-card{display:flex;flex-direction:column;gap:12px;box-sizing:border-box;height:100%;min-width:0;padding:16px;border:1px solid var(--dsw-alias-border-l1);border-radius:16px;background:var(--dsw-alias-bg-layer-1)}
+.dsh-calendar-card-today{grid-area:today}
+.dsh-calendar-card-timer{grid-area:timer}
+.dsh-calendar-card-report{grid-area:report}
+.dsh-calendar-card-log{grid-area:log}
+.dsh-calendar-card-head{display:flex;flex-wrap:wrap;align-items:center;gap:9px;min-height:38px}
 .dsh-calendar-card-icon{display:inline-flex;flex:none;align-items:center;justify-content:center;width:26px;height:26px;border-radius:9px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);color:var(--dsw-alias-brand-primary)}
-.dsh-calendar-card-title{font-size:14px;font-weight:650;line-height:20px}
+.dsh-calendar-card-title{font-size:14px;font-weight:650;line-height:20px;min-width:0;overflow-wrap:anywhere}
 .dsh-calendar-card-sub{margin-left:auto;font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dsh-calendar-card-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:auto;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1)}
 .dsh-calendar-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .dsh-calendar-label{font-weight:600}
 .dsh-calendar-hint{margin:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:17px}
@@ -344,32 +350,31 @@ window.__ModuleLoader__.load({
 .dsh-calendar-badge{display:inline-flex;align-items:center;padding:1px 7px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
 .dsh-calendar-badge.is-on{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
 .dsh-calendar-summary{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
-.dsh-calendar-input{flex:1 1 140px;min-width:100px;box-sizing:border-box;height:34px;padding:0 11px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}
+.dsh-calendar-input{flex:1 1 140px;min-width:100px;box-sizing:border-box;height:36px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}
 .dsh-calendar-input::placeholder{color:var(--dsw-alias-label-secondary)}
 .dsh-calendar-input:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
 .dsh-calendar-input:disabled{opacity:.6}
 .dsh-calendar-input.is-number{flex:0 0 84px;min-width:74px}
-.dsh-calendar-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;height:34px;padding:0 13px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer;transition:background-color .12s ease,border-color .12s ease,opacity .12s ease}
-.dsh-calendar-button:hover:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent)}
-.dsh-calendar-button:active:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-label-primary) 16%, transparent)}
-.dsh-calendar-button:disabled{opacity:.55;cursor:default}
-.dsh-calendar-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
-.dsh-calendar-button.is-primary{border-color:color-mix(in srgb, var(--dsw-alias-brand-primary) 60%, transparent);background:color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent);color:var(--dsw-alias-label-primary)}
-.dsh-calendar-button.is-danger{border-color:color-mix(in srgb, var(--dsw-alias-state-error-primary) 60%, transparent);color:var(--dsw-alias-state-error-primary)}
+.dsh-calendar-button,.dsh-calendar-primary{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;height:36px;padding:0 14px;border-radius:10px;font-family:inherit;font-size:12.5px;font-weight:600;line-height:1;white-space:nowrap;cursor:pointer;transition:background-color .12s ease,border-color .12s ease,color .12s ease,opacity .12s ease}
+.dsh-calendar-button{border:1px solid var(--dsw-alias-border-l4);background:transparent;color:var(--dsw-alias-label-primary)}
+.dsh-calendar-button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-calendar-button:active:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent)}
+.dsh-calendar-button:disabled,.dsh-calendar-primary:disabled{opacity:.55;cursor:default}
+.dsh-calendar-button:focus-visible,.dsh-calendar-primary:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+.dsh-calendar-button.is-primary,.dsh-calendar-primary{border:1px solid color-mix(in srgb, var(--dsw-alias-brand-primary) 55%, transparent);background:color-mix(in srgb, var(--dsw-alias-brand-primary) 18%, transparent);color:var(--dsw-alias-brand-primary)}
+.dsh-calendar-button.is-primary:hover:not(:disabled),.dsh-calendar-primary:hover:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-brand-primary) 28%, transparent)}
+.dsh-calendar-button.is-danger{border:1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 50%, transparent);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 16%, transparent);color:var(--dsw-alias-state-error-primary)}
+.dsh-calendar-button.is-danger:hover:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 26%, transparent)}
 .dsh-calendar-button.is-ghost{border-color:transparent;background:transparent;color:var(--dsw-alias-label-secondary)}
-.dsh-calendar-primary{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;min-height:42px;padding:0 22px;border:1px solid var(--dsw-alias-brand-primary);border-radius:12px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font:inherit;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer;box-shadow:0 10px 22px color-mix(in srgb, var(--dsw-alias-brand-primary) 22%, transparent);transition:filter .12s ease,transform .12s ease,opacity .12s ease}
-.dsh-calendar-primary:hover:not(:disabled){filter:brightness(1.06)}
-.dsh-calendar-primary:active:not(:disabled){transform:translateY(1px)}
-.dsh-calendar-primary:disabled{opacity:.55;box-shadow:none;cursor:default}
-.dsh-calendar-primary:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:3px}
-.dsh-calendar-seg{display:inline-flex;align-items:center;gap:3px;flex-wrap:wrap;padding:3px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-base)}
-.dsh-calendar-seg-btn{appearance:none;box-sizing:border-box;height:30px;padding:0 12px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;white-space:nowrap;cursor:pointer}
+.dsh-calendar-primary{flex:1 1 auto}
+.dsh-calendar-seg{display:inline-flex;align-items:center;gap:3px;flex-wrap:wrap;padding:2px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-base)}
+.dsh-calendar-seg-btn{appearance:none;box-sizing:border-box;height:32px;padding:0 12px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12.5px;font-weight:600;line-height:1;white-space:nowrap;cursor:pointer}
 .dsh-calendar-seg-btn:hover:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);color:var(--dsw-alias-label-primary)}
-.dsh-calendar-seg-btn.is-active{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-weight:600}
+.dsh-calendar-seg-btn.is-active{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .dsh-calendar-seg-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
 .dsh-calendar-seg-btn:disabled{opacity:.55;cursor:default}
-.dsh-calendar-seg .dsh-calendar-input{flex:0 0 72px;min-width:62px;height:30px;padding:0 8px;border-radius:9px}
-.dsh-calendar-field{display:flex;align-items:center;gap:7px;flex:1 1 150px;min-width:110px;box-sizing:border-box;height:34px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary)}
+.dsh-calendar-seg .dsh-calendar-input{flex:0 0 72px;min-width:62px;height:32px;padding:0 8px;border-radius:8px}
+.dsh-calendar-field{display:flex;align-items:center;gap:7px;flex:1 1 150px;min-width:110px;box-sizing:border-box;height:36px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary)}
 .dsh-calendar-field:focus-within{border-color:var(--dsw-alias-brand-primary);box-shadow:0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 18%, transparent)}
 .dsh-calendar-field-icon{display:inline-flex;flex:none;color:var(--dsw-alias-label-secondary)}
 .dsh-calendar-field .dsh-calendar-input{flex:1 1 auto;min-width:0;height:auto;padding:0;border:0;background:transparent;font-size:13px}
@@ -379,7 +384,7 @@ window.__ModuleLoader__.load({
 .dsh-calendar-add{display:flex;flex-direction:column;gap:8px;box-sizing:border-box;padding:11px;border:1px dashed color-mix(in srgb, var(--dsw-alias-brand-primary) 30%, var(--dsw-alias-border-l1));border-radius:13px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 4%, transparent)}
 .dsh-calendar-add-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .dsh-calendar-add-title{font-size:11.5px;font-weight:600;line-height:16px;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:.04em}
-.dsh-calendar-timer-hero{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.dsh-calendar-timer-hero{display:flex;flex:1 1 auto;align-items:center;gap:20px;flex-wrap:wrap;min-width:0}
 .dsh-calendar-dial{position:relative;display:flex;flex:none;align-items:center;justify-content:center;width:168px;height:168px}
 .dsh-calendar-ring{position:absolute;inset:0;width:100%;height:100%}
 .dsh-calendar-ring-track{stroke:var(--dsw-alias-bg-layer-2)}
@@ -392,10 +397,10 @@ window.__ModuleLoader__.load({
 .dsh-calendar-dial-mode{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
 .dsh-calendar-pulse{width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-success-primary);animation:dsh-calendar-pulse 1.4s ease-in-out infinite}
 .dsh-calendar-timer-meta{display:flex;flex:1 1 150px;flex-direction:column;gap:4px;min-width:0}
-.dsh-calendar-timer-controls{display:flex;flex-direction:column;gap:10px}
+.dsh-calendar-timer-controls{display:flex;flex-direction:column;gap:10px;margin-top:auto}
 .dsh-calendar-timer-controls > .dsh-calendar-field{flex:0 0 auto;width:100%}
-.dsh-calendar-timer-buttons{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
-.dsh-calendar-timeline{position:relative;display:flex;flex-direction:column;gap:1px}
+.dsh-calendar-timer-buttons{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.dsh-calendar-timeline{position:relative;display:flex;flex:1 1 auto;flex-direction:column;gap:1px;min-height:0}
 .dsh-calendar-tl-item{position:relative;display:grid;grid-template-columns:50px 14px minmax(0,1fr) auto;gap:9px;align-items:start;padding:9px 8px 9px 2px;border-radius:12px;transition:background-color .12s ease}
 .dsh-calendar-tl-item:hover{background:color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent)}
 .dsh-calendar-tl-time{padding-top:1px;font-size:12.5px;line-height:20px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -411,7 +416,6 @@ window.__ModuleLoader__.load({
 .dsh-calendar-tl-item.is-done .dsh-calendar-tl-title{text-decoration:line-through}
 .dsh-calendar-tl-actions{display:flex;align-items:center;gap:4px;opacity:0;transition:opacity .12s ease}
 .dsh-calendar-tl-item:hover .dsh-calendar-tl-actions,.dsh-calendar-tl-item:focus-within .dsh-calendar-tl-actions{opacity:1}
-.dsh-calendar-tl-actions .dsh-calendar-button{height:26px;padding:0 8px;font-size:11.5px}
 .dsh-calendar-check{appearance:none;display:inline-flex;flex:none;align-items:center;justify-content:center;box-sizing:border-box;width:22px;height:22px;padding:0;border:1.5px solid var(--dsw-alias-border-l2);border-radius:50%;background:var(--dsw-alias-bg-base);color:transparent;font:inherit;font-size:12px;line-height:18px;cursor:pointer;transition:border-color .12s ease,background-color .12s ease,color .12s ease}
 .dsh-calendar-check:hover{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
 .dsh-calendar-check.is-done{border-color:var(--dsw-alias-state-success-primary);background:var(--dsw-alias-state-success-primary);color:var(--dsw-alias-bg-base)}
@@ -419,9 +423,10 @@ window.__ModuleLoader__.load({
 .dsh-calendar-del{appearance:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer}
 .dsh-calendar-del:hover{background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent);color:var(--dsw-alias-state-error-primary)}
 .dsh-calendar-del:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
-.dsh-calendar-empty{display:flex;flex-direction:column;align-items:center;gap:8px;box-sizing:border-box;padding:22px 12px;text-align:center;border:1px dashed var(--dsw-alias-border-l1);border-radius:13px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent)}
+.dsh-calendar-empty{display:flex;flex:1 1 auto;flex-direction:column;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;min-height:120px;padding:22px 12px;text-align:center;border:1px dashed var(--dsw-alias-border-l1);border-radius:13px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent)}
 .dsh-calendar-empty-icon{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:14px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);color:var(--dsw-alias-brand-primary)}
-.dsh-calendar-log{display:flex;flex-direction:column;gap:6px}
+.dsh-calendar-empty-note{display:flex;flex:1 1 auto;align-items:center;justify-content:center;min-height:54px;text-align:center}
+.dsh-calendar-log{display:flex;flex:1 1 auto;flex-direction:column;gap:6px;min-height:0}
 .dsh-calendar-log-item{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:8px 11px;border:1px solid var(--dsw-alias-border-l1);border-left:3px solid var(--dsw-alias-brand-primary);border-radius:11px;background:var(--dsw-alias-bg-base)}
 .dsh-calendar-log-time{font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
 .dsh-calendar-log-label{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -429,7 +434,8 @@ window.__ModuleLoader__.load({
 .dsh-calendar-total{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .dsh-calendar-total-value{font-size:30px;line-height:36px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .dsh-calendar-total-caption{font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary)}
-.dsh-calendar-chart{display:flex;align-items:flex-end;gap:6px;box-sizing:border-box;height:118px;padding:10px 6px 0;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.dsh-calendar-chart-block{display:flex;flex:1 1 auto;flex-direction:column;min-height:0}
+.dsh-calendar-chart{display:flex;flex:1 1 auto;align-items:flex-end;gap:6px;box-sizing:border-box;min-height:118px;padding:10px 6px 0;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .dsh-calendar-chart-col{display:flex;flex:1 1 0;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;height:100%;min-width:0}
 .dsh-calendar-chart-track{display:flex;flex:1 1 auto;align-items:flex-end;justify-content:center;width:100%;min-height:0}
 .dsh-calendar-chart-bar{width:min(100%,34px);border-radius:9px 9px 4px 4px;background:linear-gradient(180deg, color-mix(in srgb, var(--dsw-alias-brand-primary) 88%, transparent), color-mix(in srgb, var(--dsw-alias-brand-primary) 32%, transparent));transition:height .35s ease}
@@ -455,8 +461,9 @@ window.__ModuleLoader__.load({
 .dsh-calendar-chip.is-bad .dsh-calendar-chip-dot{background:var(--dsw-alias-state-error-primary)}
 .dsh-calendar-chip-time{font-variant-numeric:tabular-nums;font-weight:600;font-size:15px;line-height:20px}
 .dsh-calendar-chip-label{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font-size:12px}
-@media (max-width:980px){.dsh-calendar-layout{grid-template-columns:minmax(0,1fr)}.dsh-calendar-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:760px){.dsh-calendar-hero{padding-top:18px}.dsh-calendar-actions{justify-content:flex-start;margin-left:0}.dsh-calendar-content{gap:14px;padding:0 14px 56px}.dsh-calendar-card{padding:14px}.dsh-calendar-dial{width:148px;height:148px}.dsh-calendar-dial-time{font-size:28px;line-height:32px}.dsh-calendar-tl-item{grid-template-columns:44px 12px minmax(0,1fr) auto;gap:7px}.dsh-calendar-tl-actions{opacity:1}.dsh-calendar-chart{height:96px;gap:4px}}
+@media (max-width:980px){.dsh-calendar-layout{grid-template-columns:minmax(0,1fr);grid-template-areas:'today' 'timer' 'report' 'log'}.dsh-calendar-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.dsh-calendar-hero{padding-top:18px}.dsh-calendar-actions{justify-content:flex-start;margin-left:0}.dsh-calendar-content{gap:14px;padding:0 14px 56px}.dsh-calendar-card{padding:14px}.dsh-calendar-dial{width:148px;height:148px}.dsh-calendar-dial-time{font-size:28px;line-height:32px}.dsh-calendar-tl-item{grid-template-columns:44px 12px minmax(0,1fr) auto;gap:7px}.dsh-calendar-tl-actions{opacity:1}.dsh-calendar-chart{min-height:96px;gap:4px}}
+@media (max-width:640px){.dsh-calendar-content{gap:12px;padding:0 12px 48px}.dsh-calendar-layout{gap:12px}.dsh-calendar-card{padding:12px;border-radius:14px}.dsh-calendar-card-head{min-height:36px;gap:8px}.dsh-calendar-timer-hero{gap:14px}.dsh-calendar-empty{min-height:104px;padding:18px 10px}}
 @media (max-width:520px){.dsh-calendar-stats{grid-template-columns:minmax(0,1fr)}}
 `;
 
@@ -985,6 +992,7 @@ window.__ModuleLoader__.load({
 
         const events = Array.isArray(snapshot?.today?.events) ? snapshot.today.events : [];
         const doneCount = events.filter(event => event.done === true).length;
+        const plannedMin = events.reduce((sum, event) => sum + (Number(event.durationMin) || 0), 0);
         const timer = snapshot?.timer ?? { mode: 'idle', running: false, paused: false, expired: false, label: '', durationMin: 0, durationSec: 0, elapsedSec: 0, remainingSec: 0 };
         const running = timer.mode !== 'idle' && timer.running === true;
         const serverNowMs = Date.parse(snapshot?.now ?? '');
@@ -1272,7 +1280,7 @@ window.__ModuleLoader__.load({
 
         const todayCard = h(
           'div',
-          { className: 'dsh-calendar-card' },
+          { className: 'dsh-calendar-card dsh-calendar-card-today' },
           h(
             'div',
             { className: 'dsh-calendar-card-head' },
@@ -1281,12 +1289,19 @@ window.__ModuleLoader__.load({
             h('span', { className: 'dsh-calendar-card-sub' }, `${doneCount} / ${events.length} ${t('doneOf')}`)
           ),
           addForm,
-          timeline
+          timeline,
+          events.length > 0
+            ? h(
+              'div',
+              { className: 'dsh-calendar-card-foot' },
+              h('span', { className: 'dsh-calendar-hint' }, `${t('todayPlanned')} ${durationText(plannedMin * 60, t)}`)
+            )
+            : null
         );
 
         const timerCard = h(
           'div',
-          { className: 'dsh-calendar-card' },
+          { className: 'dsh-calendar-card dsh-calendar-card-timer' },
           h(
             'div',
             { className: 'dsh-calendar-card-head' },
@@ -1381,7 +1396,7 @@ window.__ModuleLoader__.load({
 
         const logCard = h(
           'div',
-          { className: 'dsh-calendar-card' },
+          { className: 'dsh-calendar-card dsh-calendar-card-log' },
           h(
             'div',
             { className: 'dsh-calendar-card-head' },
@@ -1484,7 +1499,7 @@ window.__ModuleLoader__.load({
 
         const reportCard = h(
           'div',
-          { className: 'dsh-calendar-card' },
+          { className: 'dsh-calendar-card dsh-calendar-card-report' },
           h(
             'div',
             { className: 'dsh-calendar-card-head' },
@@ -1508,7 +1523,7 @@ window.__ModuleLoader__.load({
             )
           ),
           activeReport === null
-            ? h('p', { className: 'dsh-calendar-hint' }, t('loading'))
+            ? h('p', { className: 'dsh-calendar-hint dsh-calendar-empty-note' }, t('loading'))
             : h(
               'div',
               { className: 'dsh-calendar-total' },
@@ -1517,7 +1532,7 @@ window.__ModuleLoader__.load({
             ),
           h(
             'div',
-            null,
+            { className: 'dsh-calendar-chart-block' },
             h(
               'div',
               { className: 'dsh-calendar-chart', role: 'img', 'aria-label': t('reportChartCaption') },
@@ -1526,7 +1541,7 @@ window.__ModuleLoader__.load({
             h('p', { className: 'dsh-calendar-chart-caption' }, t('reportChartCaption'))
           ),
           activeReport !== null && reportLabels.length === 0
-            ? h('p', { className: 'dsh-calendar-hint' }, t('reportEmpty'))
+            ? h('p', { className: 'dsh-calendar-hint dsh-calendar-empty-note' }, t('reportEmpty'))
             : null,
           activeReport !== null && reportLabels.length > 0
             ? h(
@@ -1615,8 +1630,10 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { className: 'dsh-calendar-layout' },
-                h('div', { className: 'dsh-calendar-col' }, todayCard, reportCard),
-                h('div', { className: 'dsh-calendar-col' }, timerCard, logCard)
+                todayCard,
+                timerCard,
+                reportCard,
+                logCard
               )
             )
           )

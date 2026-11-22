@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+﻿import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { access, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -19,10 +19,10 @@ async function exists(relative) {
   await access(join(ROOT, relative))
 }
 
-test('package.json: bundle-патч, клиент, версия 0.2.2 и экспорты ресурсов', async () => {
+test('package.json: bundle-патч, клиент, версия 0.2.3 и экспорты ресурсов', async () => {
   const manifest = await readJson('package.json')
   assert.equal(manifest.name, 'dsh-calendar')
-  assert.equal(manifest.version, '0.2.2')
+  assert.equal(manifest.version, '0.2.3')
   assert.equal(manifest.private, true)
   assert.equal(manifest.type, 'module')
   assert.equal(manifest.dsh?.bundle?.patch, './cordis.patch.yml')
@@ -90,7 +90,7 @@ test('ресурсы на месте: index.js, client.js, lib, icon.svg, README
   }
   const icon = await readFile(join(ROOT, 'icon.svg'), 'utf8')
   assert.match(icon, /^<svg /)
-  assert.match(icon, /viewBox="0 0 24 24"/)
+  assert.match(icon, /viewBox="0 0 48 48"/)
   assert.ok(!icon.includes('\uFFFD'))
 })
 
@@ -174,6 +174,7 @@ test('README и docs/DETAIL.md: инструкция для новичка, ин
     'левой панели',
     '0.2.0',
     '0.2.2',
+    '0.2.3',
   ]) {
     assert.ok(readme.includes(marker), `README содержит «${marker}»`)
   }
@@ -197,3 +198,4 @@ test('README и docs/DETAIL.md: инструкция для новичка, ин
     assert.equal(text.includes('\uFFFD'), false, 'нет битых символов')
   }
 })
+
