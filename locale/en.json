@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Calendar and time tracking",
+    "description": "The calendar opens in the left sidebar of DSH, next to Expenses and Plugins: events of the day, a Host-side pomodoro timer, a time log and today/week reports. An event is added with a title, time and duration, can be marked done and removed; the timer survives a DSH restart and its remaining time shows in a floating chip; reports show the total and a breakdown by label. The agent can do the same through the tools calendar_today, calendar_add, calendar_list, timer_start, timer_status, timer_stop and time_report. Data stays on this computer in ~/.dsh/dsh-calendar/data.json. Find the plugin in Plugins, and the calendar itself through the icon in the left sidebar.",
+    "detail": "docs/DETAIL.md"
+  }
+}
