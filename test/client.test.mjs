@@ -81,13 +81,34 @@ function firstOfType(node, type) {
   return undefined
 }
 
+/** Find every element of the given host type in a rendered tree. */
+function allOfType(node, type, found = []) {
+  if (node === null || node === undefined) return found
+  if (Array.isArray(node)) {
+    for (const item of node) allOfType(item, type, found)
+    return found
+  }
+  if (typeof node === 'object') {
+    if (node.type === type) found.push(node)
+    allOfType(node.props?.children, type, found)
+  }
+  return found
+}
+
 /**
  * Load `client.js` the way the browser module loader does.
  * @param options - `{ layout }`: a fake `ctx.layout` navigation service.
  * @returns `{ module, locales, injected, registered, selectedPanels }`.
  */
 async function loadClient(options = {}) {
-  const source = await readFile(join(ROOT, 'client.js'), 'utf8')
+  let source = await readFile(join(ROOT, 'client.js'), 'utf8')
+  // A render smoke test may seed the initial snapshot: the component takes it
+  // from `useState`, and the effects (the real fetch) stay out of the picture.
+  if (options.snapshot !== undefined) {
+    const anchor = 'const [snapshot, setSnapshot] = React.useState(null);'
+    assert.ok(source.includes(anchor), 'нашлась начальная строка снимка')
+    source = source.replace(anchor, `const [snapshot, setSnapshot] = React.useState(${JSON.stringify(options.snapshot)});`)
+  }
   const captured = {}
   const sandbox = {
     window: {
@@ -222,7 +243,7 @@ test('client.js: иконка левой панели — SVG календаря
   assert.equal(small.props.width, 16, 'по умолчанию 16px')
 })
 
-test('client.js: страница календаря рисуется в main и содержит четыре блока', async () => {
+test('client.js: страница календаря — шапка, стат-карточки, круговой прогресс, таймлайн и бар-чарт', async () => {
   const { registered } = await loadClient()
   const page = slot(registered, 'main').component
   const element = page({})
@@ -233,21 +254,49 @@ test('client.js: страница календаря рисуется в main и
   const allClasses = classes(tree).join(' ')
   for (const className of [
     'dsh-calendar-page',
-    'dsh-calendar-heading',
-    'dsh-calendar-grid',
+    'dsh-calendar-hero',
+    'dsh-calendar-stats',
+    'dsh-calendar-stat',
+    'dsh-calendar-layout',
     'dsh-calendar-card',
     'dsh-calendar-input',
-    'dsh-calendar-counter',
+    'dsh-calendar-seg',
+    'dsh-calendar-primary',
     'dsh-calendar-button',
+    'dsh-calendar-ring',
+    'dsh-calendar-timeline',
+    'dsh-calendar-chart',
+    'dsh-calendar-empty',
   ]) {
     assert.ok(allClasses.includes(className), `на странице есть ${className}`)
   }
+
+  const statCards = classes(tree).filter(name => name.split(' ').includes('dsh-calendar-stat'))
+  assert.equal(statCards.length, 4, 'четыре стат-карточки: события, выполнено, время, записи')
   const cards = classes(tree).filter(name => name.split(' ').includes('dsh-calendar-card'))
   assert.equal(cards.length, 4, 'четыре блока-карточки: сегодня, таймер, журнал, отчёт')
+
+  // Прогресс-круг таймера: SVG circle со stroke-dasharray и живым смещением.
+  const ringBar = allOfType(tree, 'circle').find(circle => typeof circle.props.strokeDasharray === 'string')
+  assert.ok(ringBar !== undefined, 'есть круг прогресса со stroke-dasharray')
+  assert.match(ringBar.props.className, /dsh-calendar-ring-bar/)
+  assert.equal(typeof ringBar.props.strokeDashoffset, 'string', 'у круга есть stroke-dashoffset')
+  assert.equal(ringBar.props.r, 64)
+  const ringTrack = allOfType(tree, 'circle').find(circle => typeof circle.props.strokeWidth === 'number' && circle.props.strokeDasharray === undefined)
+  assert.ok(ringTrack !== undefined, 'есть дорожка круга')
+
+  // Мини-бар-чарт: семь столбиков по дням недели, без внешних библиотек.
+  const chartColumns = classes(tree).filter(name => name.split(' ').includes('dsh-calendar-chart-col'))
+  assert.equal(chartColumns.length, 7, 'в бар-чарте семь дней недели')
+
   const labels = texts(tree).join(' ')
   for (const key of [
     'dshCalendar.pageTitle',
     'dshCalendar.hint',
+    'dshCalendar.statsEvents',
+    'dshCalendar.statsDone',
+    'dshCalendar.statsTracked',
+    'dshCalendar.statsRecords',
     'dshCalendar.todayTitle',
     'dshCalendar.addTitle',
     'dshCalendar.noEvents',
@@ -263,12 +312,120 @@ test('client.js: страница календаря рисуется в main и
     'dshCalendar.reportTitle',
     'dshCalendar.rangeToday',
     'dshCalendar.rangeWeek',
+    'dshCalendar.reportChartCaption',
     'dshCalendar.refresh',
     'dshCalendar.loading',
   ]) {
     assert.ok(labels.includes(key), `на странице есть строка ${key}`)
   }
   assert.ok(texts(tree).includes('25:00'), 'счётчик в покое показывает 25:00')
+  assert.match(labels, /dshCalendar\.greeting/, 'в шапке есть приветствие по времени суток')
+  assert.match(labels, /dshCalendar\.weekday/, 'в шапке есть день недели')
+})
+
+test('client.js: полный снимок — строки таймлайна, журнал, кольцо таймера и бар-чарт с данными', async () => {
+  const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((_, index) => ({
+    date: `2026-11-${16 + index}`,
+    weekday: index,
+    durationSec: index === 0 ? 1500 : index === 2 ? 2400 : 0,
+    isToday: index === 2,
+  }))
+  const byLabel = [{ label: 'Работа', durationSec: 1500, count: 1, share: 1 }]
+  const snapshot = {
+    ok: true,
+    version: 1,
+    now: new Date().toISOString(),
+    today: {
+      date: '2026-11-18',
+      count: 2,
+      done: 1,
+      events: [
+        { id: 'e1', title: 'Созвон', time: '14:00', endTime: '14:45', durationMin: 45, note: 'важно', done: false },
+        { id: 'e2', title: 'Код', time: '09:00', endTime: '09:30', durationMin: 30, note: '', done: true },
+      ],
+    },
+    timer: {
+      mode: 'work',
+      running: true,
+      paused: false,
+      expired: false,
+      label: 'Код',
+      durationMin: 25,
+      durationSec: 1500,
+      elapsedSec: 300,
+      remainingSec: 1200,
+      startedAt: new Date(Date.now() - 300_000).toISOString(),
+      finishedAt: '',
+    },
+    logToday: {
+      count: 1,
+      totalSec: 1500,
+      entries: [{ id: 'l1', label: 'Работа', startTime: '09:00', endTime: '09:25', durationSec: 1500, source: 'timer' }],
+    },
+    recent: [],
+    report: {
+      today: { range: 'today', totalSec: 1500, count: 1, byLabel, days },
+      week: { range: 'week', totalSec: 3900, count: 2, byLabel, days },
+    },
+    limits: { maxEntries: 2000 },
+  }
+  const { registered } = await loadClient({ snapshot })
+  const tree = render(slot(registered, 'main').component({}))
+  const allClasses = classes(tree)
+
+  const items = allClasses.filter(name => name.split(' ').includes('dsh-calendar-tl-item'))
+  assert.equal(items.length, 2, 'два события в таймлайне')
+  assert.equal(items.filter(name => name.split(' ').includes('is-done')).length, 1, 'выполненное приглушено')
+  assert.equal(allClasses.filter(name => name.split(' ').includes('dsh-calendar-log-item')).length, 1, 'строка журнала')
+  assert.equal(allClasses.filter(name => name.split(' ').includes('dsh-calendar-bar-row')).length, 1, 'полоска метки')
+  assert.equal(allClasses.filter(name => name.split(' ').includes('dsh-calendar-del')).length, 2, 'у каждого события есть удаление')
+
+  const chartBars = allOfType(tree, 'div').filter(div => div.props.className === 'dsh-calendar-chart-bar')
+  assert.equal(chartBars.length, 7, 'семь столбиков бар-чарта')
+  const heights = chartBars.map(bar => Number.parseFloat(String(bar.props.style?.height)))
+  assert.equal(heights[0], 63, 'столбик понедельника пропорционален времени')
+  assert.equal(heights[2], 100, 'сегодняшний столбик — самый высокий')
+  assert.ok(heights.every(height => height > 0), 'у каждого дня есть видимая высота')
+  assert.equal(allClasses.filter(name => name.split(' ').includes('is-today')).length >= 1, true, 'сегодняшний столбик подсвечен')
+
+  const labels = texts(tree)
+  for (const text of ['Созвон', 'Код', 'важно', 'Работа', '20:00', '2', '1']) {
+    assert.ok(labels.includes(text), `на странице есть «${text}»`)
+  }
+
+  const ringBar = allOfType(tree, 'circle').find(circle => typeof circle.props.strokeDasharray === 'string')
+  const offset = Number.parseFloat(ringBar.props.strokeDashoffset)
+  const length = Number.parseFloat(String(ringBar.props.strokeDasharray).split(' ')[0])
+  assert.ok(offset > 0 && offset < length, 'кольцо показывает частичный прогресс запущенного таймера')
+  assert.ok(labels.join(' ').includes('dshCalendar.timerPauseAction'), 'у идущего таймера кнопка «Пауза»')
+})
+
+test('client.js: таймлайн и бар-чарт размечены вложенными элементами', async () => {
+  const source = await readFile(join(ROOT, 'client.js'), 'utf8')
+  for (const marker of [
+    'dsh-calendar-tl-item',
+    'dsh-calendar-tl-time',
+    'dsh-calendar-tl-rail',
+    'dsh-calendar-tl-dot',
+    'dsh-calendar-tl-title',
+    'dsh-calendar-tl-note',
+    'dsh-calendar-tl-actions',
+    'dsh-calendar-chart-bar',
+    'dsh-calendar-chart-day',
+    'dsh-calendar-chart-col is-today',
+    'strokeDasharray',
+    'strokeDashoffset',
+    'dsh-calendar-status-dot',
+    'dsh-calendar-seg-btn',
+    'dsh-calendar-pulse',
+    'TIMELINE_ACCENTS',
+  ]) {
+    assert.ok(source.includes(marker), `в разметке есть ${marker}`)
+  }
+  // Выполненные события приглушены и зачёркнуты, удаление появляется по наведению.
+  assert.match(source, /dsh-calendar-tl-item\.is-done/)
+  assert.match(source, /text-decoration:line-through/)
+  assert.match(source, /:hover \.dsh-calendar-tl-actions/)
 })
 
 test('client.js: секция плагина — краткая справка с кнопкой открытия панели', async () => {
@@ -318,12 +475,31 @@ test('client.js: плавающий чип таймера спрятан без 
   assert.match(source, /selectPanel\(PANEL_ID\)/)
 })
 
-test('client.js: стили используют токены темы, а не свои цвета', async () => {
+test('client.js: стили используют токены темы, адаптив и анимации', async () => {
   const source = await readFile(join(ROOT, 'client.js'), 'utf8')
-  for (const token of ['--dsw-alias-bg-layer-1', '--dsw-alias-border-l1', '--dsw-alias-label-primary', '--dsw-alias-brand-primary']) {
+  for (const token of [
+    '--dsw-alias-bg-layer-1',
+    '--dsw-alias-bg-layer-2',
+    '--dsw-alias-border-l1',
+    '--dsw-alias-border-l2',
+    '--dsw-alias-label-primary',
+    '--dsw-alias-label-secondary',
+    '--dsw-alias-brand-primary',
+    '--dsw-alias-state-success-primary',
+    '--dsw-alias-state-warn-primary',
+    '--dsw-alias-state-error-primary',
+  ]) {
     assert.ok(source.includes(token), `стили используют ${token}`)
   }
   assert.match(source, /new AudioContext|AudioContextClass/, 'есть звук окончания таймера')
   assert.match(source, /dsh-calendar-chip-wrap\{position:fixed/, 'чип прибит к углу экрана')
-  assert.match(source, /style: \{ width: /, 'у прогресс-баров отчёта есть ширина')
+  assert.match(source, /style: \{ width: /, 'у полосок отчёта есть ширина')
+  assert.match(source, /style: \{ height: /, 'у столбиков бар-чарта есть высота')
+  assert.match(source, /@keyframes dsh-calendar-pulse/, 'есть пульсация индикатора таймера')
+  assert.match(source, /@media \(max-width:760px\)/, 'одна колонка на узком экране')
+  assert.match(source, /@media \(max-width:980px\)/, 'раскладка сжимается раньше')
+  assert.match(source, /max-width:1000px/, 'контент центрирован и ограничен по ширине')
+  assert.match(source, /margin:0 auto/, 'контейнер выровнен по центру')
+  assert.match(source, /border-radius:16px/, 'мягкие радиусы карточек')
+  assert.equal(source.includes('\uFFFD'), false, 'нет битых символов')
 })

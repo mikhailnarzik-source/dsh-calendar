@@ -3,12 +3,14 @@
  *
  * Registers a global panel in the left rail (the same `main` + `sidebar.panellist`
  * pair «Расходы» and «Плагины» use), a floating timer chip in `shell.overlay`,
- * and a short help section on the plugin page:
- *   «Сегодня»      — events of the day, a quick-add form, done marks, deletion;
- *   «Таймер»       — a pomodoro counter that ticks every second, work 25,
- *                    break 5 or a custom length, start/pause/resume/stop;
- *   «Учёт времени» — the time log of today with its total and a manual record;
- *   «Отчёт»        — today or the current week, broken down by label.
+ * and a short help section on the plugin page. The panel itself is one centred
+ * column of cards:
+ *   шапка         — дата, день недели, приветствие, статус таймера, «Обновить»;
+ *   стат-карточки — события, выполнено, учтено времени, записей;
+ *   «Сегодня»     — быстрый ввод и таймлайн событий с отметкой выполнения;
+ *   «Таймер»      — круговой прогресс, режимы «Работа 25 / Перерыв 5 / Своя»;
+ *   «Учёт времени»— записи дня, итог «Всего» и ручное добавление;
+ *   «Отчёт»       — Сегодня/Неделя, мини-бар-чарт по дням недели, доли меток.
  *
  * The Host owns the state: the page only calls POST routes and re-reads the
  * snapshot, so the same timer runs in the agent and in the browser. The panel
@@ -38,6 +40,20 @@ window.__ModuleLoader__.load({
     const REFRESH_MS = 5000;
     /** The floating chip re-reads the timer in the background at this cadence. */
     const CHIP_REFRESH_MS = 20000;
+    /** Geometry of the SVG progress ring, in viewBox units. */
+    const RING_RADIUS = 64;
+    const RING_STROKE = 10;
+    const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+    /** Cycle of accent colours for the event dots of the timeline. */
+    const TIMELINE_ACCENTS = [
+      'var(--dsw-alias-brand-primary)',
+      'var(--dsw-alias-state-success-primary)',
+      'var(--dsw-alias-state-warn-primary)',
+      'var(--dsw-alias-state-error-primary)'
+    ];
+    /** Weekday keys indexed like `Date.getDay()`: 0 is Sunday. */
+    const WEEKDAY_LONG_KEYS = ['weekdaySun', 'weekdayMon', 'weekdayTue', 'weekdayWed', 'weekdayThu', 'weekdayFri', 'weekdaySat'];
+    const WEEKDAY_SHORT_KEYS = ['weekdayShortSun', 'weekdayShortMon', 'weekdayShortTue', 'weekdayShortWed', 'weekdayShortThu', 'weekdayShortFri', 'weekdayShortSat'];
 
     const en = {
       panel: 'Calendar',
@@ -62,6 +78,7 @@ window.__ModuleLoader__.load({
       todayTitle: 'Today',
       todayCount: 'events:',
       doneCount: 'done:',
+      doneOf: 'done',
       noEvents: 'No events today. Add one in the form above.',
       addTitle: 'New event',
       titleLabel: 'Title',
@@ -130,7 +147,31 @@ window.__ModuleLoader__.load({
       summaryTimerOff: 'timer off',
       summaryTimerOn: 'timer on',
       summaryBreakOn: 'break',
-      summaryEvents: 'events:'
+      summaryEvents: 'events:',
+      greetingMorning: 'Good morning',
+      greetingDay: 'Good afternoon',
+      greetingEvening: 'Good evening',
+      greetingNight: 'Good night',
+      weekdayMon: 'Monday',
+      weekdayTue: 'Tuesday',
+      weekdayWed: 'Wednesday',
+      weekdayThu: 'Thursday',
+      weekdayFri: 'Friday',
+      weekdaySat: 'Saturday',
+      weekdaySun: 'Sunday',
+      weekdayShortMon: 'Mon',
+      weekdayShortTue: 'Tue',
+      weekdayShortWed: 'Wed',
+      weekdayShortThu: 'Thu',
+      weekdayShortFri: 'Fri',
+      weekdayShortSat: 'Sat',
+      weekdayShortSun: 'Sun',
+      statsEvents: 'Events today',
+      statsDone: 'Completed',
+      statsTracked: 'Time tracked',
+      statsRecords: 'Records',
+      reportChartCaption: 'by day of the week',
+      invalidDuration: 'Duration is 5 to 1440 minutes.'
     };
     const ru = {
       panel: 'Календарь',
@@ -155,6 +196,7 @@ window.__ModuleLoader__.load({
       todayTitle: 'Сегодня',
       todayCount: 'событий:',
       doneCount: 'выполнено:',
+      doneOf: 'выполнено',
       noEvents: 'На сегодня событий нет. Добавьте событие в форме выше.',
       addTitle: 'Новое событие',
       titleLabel: 'Название',
@@ -223,26 +265,185 @@ window.__ModuleLoader__.load({
       summaryTimerOff: 'таймер выкл',
       summaryTimerOn: 'таймер идёт',
       summaryBreakOn: 'перерыв',
-      summaryEvents: 'событий:'
+      summaryEvents: 'событий:',
+      greetingMorning: 'Доброе утро',
+      greetingDay: 'Добрый день',
+      greetingEvening: 'Добрый вечер',
+      greetingNight: 'Доброй ночи',
+      weekdayMon: 'понедельник',
+      weekdayTue: 'вторник',
+      weekdayWed: 'среда',
+      weekdayThu: 'четверг',
+      weekdayFri: 'пятница',
+      weekdaySat: 'суббота',
+      weekdaySun: 'воскресенье',
+      weekdayShortMon: 'пн',
+      weekdayShortTue: 'вт',
+      weekdayShortWed: 'ср',
+      weekdayShortThu: 'чт',
+      weekdayShortFri: 'пт',
+      weekdayShortSat: 'сб',
+      weekdayShortSun: 'вс',
+      statsEvents: 'Событий сегодня',
+      statsDone: 'Выполнено',
+      statsTracked: 'Учтено времени',
+      statsRecords: 'Записей',
+      reportChartCaption: 'по дням недели',
+      invalidDuration: 'Длительность — от 5 до 1440 минут.'
     };
 
     /**
      * The stylesheet inherits the host theme: surfaces, text and borders come
-     * from the `--dsw-alias-*` tokens, geometry is plain CSS.
+     * from the `--dsw-alias-*` tokens, geometry is plain CSS. Every accent is a
+     * colour-mix of a token, so light and dark themes both stay readable.
      */
     const CSS = `
 .dsh-calendar-page{box-sizing:border-box;display:flex;width:100%;min-width:0;height:100%;min-height:0;overflow:hidden;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);font-size:13px;line-height:20px}
 .dsh-calendar-scroll{position:relative;flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable}
-.dsh-calendar-content{display:flex;flex-direction:column;gap:14px;box-sizing:border-box;width:100%;max-width:1100px;margin:0 auto;padding:0 clamp(20px,4vw,48px) 56px}
-.dsh-calendar-heading{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding-top:28px}
-.dsh-calendar-heading-main{display:flex;flex-direction:column;gap:2px;min-width:0}
-.dsh-calendar-heading h1{margin:0;font-size:22px;font-weight:600;line-height:30px;letter-spacing:-.01em}
-.dsh-calendar-sub{margin:0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}
+.dsh-calendar-content{display:flex;flex-direction:column;gap:18px;box-sizing:border-box;width:100%;max-width:1000px;margin:0 auto;padding:0 clamp(18px,4vw,40px) 64px}
+.dsh-calendar-hero{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding-top:26px}
 .dsh-calendar-logo{display:inline-flex;flex:none;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent);color:var(--dsw-alias-brand-primary)}
+.dsh-calendar-logo.is-large{width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg, color-mix(in srgb, var(--dsw-alias-brand-primary) 26%, transparent), color-mix(in srgb, var(--dsw-alias-brand-primary) 8%, transparent));box-shadow:0 10px 26px color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent)}
 .dsh-calendar-logo.is-small{width:26px;height:26px;border-radius:9px}
+.dsh-calendar-hero-text{display:flex;flex-direction:column;gap:3px;min-width:0}
+.dsh-calendar-hero-text h1{margin:0;font-size:23px;font-weight:650;line-height:30px;letter-spacing:-.015em}
+.dsh-calendar-date{margin:0;font-size:13px;line-height:19px;opacity:.88}
+.dsh-calendar-sub{margin:0;color:var(--dsw-alias-label-secondary);font-size:12.5px;line-height:18px;max-width:54ch}
 .dsh-calendar-actions{display:flex;flex:none;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;margin-left:auto}
-.dsh-calendar-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
-.dsh-calendar-grid > .dsh-calendar-card{min-width:0}
+.dsh-calendar-status{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font-size:12px;line-height:17px;white-space:nowrap}
+.dsh-calendar-status-dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-label-secondary)}
+.dsh-calendar-status.is-on{border-color:color-mix(in srgb, var(--dsw-alias-state-success-primary) 55%, transparent);background:color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);color:var(--dsw-alias-label-primary)}
+.dsh-calendar-status.is-on .dsh-calendar-status-dot{background:var(--dsw-alias-state-success-primary);animation:dsh-calendar-pulse 1.8s ease-in-out infinite}
+.dsh-calendar-status.is-warn{border-color:color-mix(in srgb, var(--dsw-alias-state-warn-primary) 55%, transparent);background:color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);color:var(--dsw-alias-label-primary)}
+.dsh-calendar-status.is-warn .dsh-calendar-status-dot{background:var(--dsw-alias-state-warn-primary)}
+.dsh-calendar-status.is-bad{border-color:color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 13%, transparent);color:var(--dsw-alias-label-primary)}
+.dsh-calendar-status.is-bad .dsh-calendar-status-dot{background:var(--dsw-alias-state-error-primary)}
+@keyframes dsh-calendar-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.72)}}
+.dsh-calendar-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.dsh-calendar-stat{display:flex;align-items:flex-start;gap:12px;box-sizing:border-box;min-width:0;padding:14px 15px;border:1px solid var(--dsw-alias-border-l1);border-radius:16px;background:var(--dsw-alias-bg-layer-1)}
+.dsh-calendar-stat-icon{display:inline-flex;flex:none;align-items:center;justify-content:center;width:34px;height:34px;border-radius:11px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent);color:var(--dsw-alias-brand-primary)}
+.dsh-calendar-stat-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dsh-calendar-stat-value{font-size:20px;line-height:26px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-calendar-stat-label{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-calendar-stat.is-done .dsh-calendar-stat-icon{background:color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent);color:var(--dsw-alias-state-success-primary)}
+.dsh-calendar-stat.is-time .dsh-calendar-stat-icon{background:color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent);color:var(--dsw-alias-state-warn-primary)}
+.dsh-calendar-stat.is-count .dsh-calendar-stat-icon{background:color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent);color:var(--dsw-alias-label-primary)}
+.dsh-calendar-layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
+.dsh-calendar-col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.dsh-calendar-card{display:flex;flex-direction:column;gap:12px;box-sizing:border-box;min-width:0;padding:16px;border:1px solid var(--dsw-alias-border-l1);border-radius:16px;background:var(--dsw-alias-bg-layer-1)}
+.dsh-calendar-card-head{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.dsh-calendar-card-icon{display:inline-flex;flex:none;align-items:center;justify-content:center;width:26px;height:26px;border-radius:9px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);color:var(--dsw-alias-brand-primary)}
+.dsh-calendar-card-title{font-size:14px;font-weight:650;line-height:20px}
+.dsh-calendar-card-sub{margin-left:auto;font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dsh-calendar-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dsh-calendar-label{font-weight:600}
+.dsh-calendar-hint{margin:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:17px}
+.dsh-calendar-note{margin:0;font-size:12px;line-height:17px;color:var(--dsw-alias-state-success-primary)}
+.dsh-calendar-note.is-bad{color:var(--dsw-alias-state-error-primary)}
+.dsh-calendar-error{margin:0;font-size:12px;line-height:17px;color:var(--dsw-alias-state-error-primary)}
+.dsh-calendar-badge{display:inline-flex;align-items:center;padding:1px 7px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
+.dsh-calendar-badge.is-on{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.dsh-calendar-summary{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+.dsh-calendar-input{flex:1 1 140px;min-width:100px;box-sizing:border-box;height:34px;padding:0 11px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}
+.dsh-calendar-input::placeholder{color:var(--dsw-alias-label-secondary)}
+.dsh-calendar-input:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.dsh-calendar-input:disabled{opacity:.6}
+.dsh-calendar-input.is-number{flex:0 0 84px;min-width:74px}
+.dsh-calendar-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;height:34px;padding:0 13px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer;transition:background-color .12s ease,border-color .12s ease,opacity .12s ease}
+.dsh-calendar-button:hover:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent)}
+.dsh-calendar-button:active:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-label-primary) 16%, transparent)}
+.dsh-calendar-button:disabled{opacity:.55;cursor:default}
+.dsh-calendar-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+.dsh-calendar-button.is-primary{border-color:color-mix(in srgb, var(--dsw-alias-brand-primary) 60%, transparent);background:color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent);color:var(--dsw-alias-label-primary)}
+.dsh-calendar-button.is-danger{border-color:color-mix(in srgb, var(--dsw-alias-state-error-primary) 60%, transparent);color:var(--dsw-alias-state-error-primary)}
+.dsh-calendar-button.is-ghost{border-color:transparent;background:transparent;color:var(--dsw-alias-label-secondary)}
+.dsh-calendar-primary{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;min-height:42px;padding:0 22px;border:1px solid var(--dsw-alias-brand-primary);border-radius:12px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font:inherit;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer;box-shadow:0 10px 22px color-mix(in srgb, var(--dsw-alias-brand-primary) 22%, transparent);transition:filter .12s ease,transform .12s ease,opacity .12s ease}
+.dsh-calendar-primary:hover:not(:disabled){filter:brightness(1.06)}
+.dsh-calendar-primary:active:not(:disabled){transform:translateY(1px)}
+.dsh-calendar-primary:disabled{opacity:.55;box-shadow:none;cursor:default}
+.dsh-calendar-primary:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:3px}
+.dsh-calendar-seg{display:inline-flex;align-items:center;gap:3px;flex-wrap:wrap;padding:3px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-base)}
+.dsh-calendar-seg-btn{appearance:none;box-sizing:border-box;height:30px;padding:0 12px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;white-space:nowrap;cursor:pointer}
+.dsh-calendar-seg-btn:hover:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);color:var(--dsw-alias-label-primary)}
+.dsh-calendar-seg-btn.is-active{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-weight:600}
+.dsh-calendar-seg-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.dsh-calendar-seg-btn:disabled{opacity:.55;cursor:default}
+.dsh-calendar-seg .dsh-calendar-input{flex:0 0 72px;min-width:62px;height:30px;padding:0 8px;border-radius:9px}
+.dsh-calendar-field{display:flex;align-items:center;gap:7px;flex:1 1 150px;min-width:110px;box-sizing:border-box;height:34px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary)}
+.dsh-calendar-field:focus-within{border-color:var(--dsw-alias-brand-primary);box-shadow:0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 18%, transparent)}
+.dsh-calendar-field-icon{display:inline-flex;flex:none;color:var(--dsw-alias-label-secondary)}
+.dsh-calendar-field .dsh-calendar-input{flex:1 1 auto;min-width:0;height:auto;padding:0;border:0;background:transparent;font-size:13px}
+.dsh-calendar-field .dsh-calendar-input:focus-visible{outline:none}
+.dsh-calendar-field.is-time{flex:0 0 108px;min-width:98px}
+.dsh-calendar-field.is-number{flex:0 0 88px;min-width:78px}
+.dsh-calendar-add{display:flex;flex-direction:column;gap:8px;box-sizing:border-box;padding:11px;border:1px dashed color-mix(in srgb, var(--dsw-alias-brand-primary) 30%, var(--dsw-alias-border-l1));border-radius:13px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 4%, transparent)}
+.dsh-calendar-add-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.dsh-calendar-add-title{font-size:11.5px;font-weight:600;line-height:16px;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:.04em}
+.dsh-calendar-timer-hero{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.dsh-calendar-dial{position:relative;display:flex;flex:none;align-items:center;justify-content:center;width:168px;height:168px}
+.dsh-calendar-ring{position:absolute;inset:0;width:100%;height:100%}
+.dsh-calendar-ring-track{stroke:var(--dsw-alias-bg-layer-2)}
+.dsh-calendar-ring-bar{stroke:var(--dsw-alias-brand-primary);transition:stroke-dashoffset .45s linear}
+.dsh-calendar-dial.is-expired .dsh-calendar-ring-bar{stroke:var(--dsw-alias-state-error-primary)}
+.dsh-calendar-dial.is-paused .dsh-calendar-ring-bar{stroke:var(--dsw-alias-state-warn-primary)}
+.dsh-calendar-dial-text{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center}
+.dsh-calendar-dial-time{font-size:32px;line-height:36px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.dsh-calendar-dial-time.is-bad{color:var(--dsw-alias-state-error-primary)}
+.dsh-calendar-dial-mode{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
+.dsh-calendar-pulse{width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-success-primary);animation:dsh-calendar-pulse 1.4s ease-in-out infinite}
+.dsh-calendar-timer-meta{display:flex;flex:1 1 150px;flex-direction:column;gap:4px;min-width:0}
+.dsh-calendar-timer-controls{display:flex;flex-direction:column;gap:10px}
+.dsh-calendar-timer-controls > .dsh-calendar-field{flex:0 0 auto;width:100%}
+.dsh-calendar-timer-buttons{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.dsh-calendar-timeline{position:relative;display:flex;flex-direction:column;gap:1px}
+.dsh-calendar-tl-item{position:relative;display:grid;grid-template-columns:50px 14px minmax(0,1fr) auto;gap:9px;align-items:start;padding:9px 8px 9px 2px;border-radius:12px;transition:background-color .12s ease}
+.dsh-calendar-tl-item:hover{background:color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent)}
+.dsh-calendar-tl-time{padding-top:1px;font-size:12.5px;line-height:20px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
+.dsh-calendar-tl-rail{position:relative;align-self:stretch;min-height:20px}
+.dsh-calendar-tl-rail::before{content:'';position:absolute;top:-11px;bottom:-11px;left:50%;width:2px;transform:translateX(-50%);border-radius:1px;background:var(--dsw-alias-border-l1)}
+.dsh-calendar-tl-dot{position:absolute;top:6px;left:50%;width:10px;height:10px;transform:translateX(-50%);border-radius:50%;background:var(--dsh-calendar-accent, var(--dsw-alias-brand-primary));box-shadow:0 0 0 3px var(--dsw-alias-bg-layer-1)}
+.dsh-calendar-tl-main{display:flex;flex-direction:column;gap:2px;min-width:0;padding-top:1px}
+.dsh-calendar-tl-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.dsh-calendar-tl-title{overflow:hidden;font-size:13.5px;font-weight:600;line-height:20px;text-overflow:ellipsis;white-space:nowrap}
+.dsh-calendar-tl-meta{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dsh-calendar-tl-note{display:-webkit-box;overflow:hidden;margin:0;font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary);-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.dsh-calendar-tl-item.is-done{opacity:.55}
+.dsh-calendar-tl-item.is-done .dsh-calendar-tl-title{text-decoration:line-through}
+.dsh-calendar-tl-actions{display:flex;align-items:center;gap:4px;opacity:0;transition:opacity .12s ease}
+.dsh-calendar-tl-item:hover .dsh-calendar-tl-actions,.dsh-calendar-tl-item:focus-within .dsh-calendar-tl-actions{opacity:1}
+.dsh-calendar-tl-actions .dsh-calendar-button{height:26px;padding:0 8px;font-size:11.5px}
+.dsh-calendar-check{appearance:none;display:inline-flex;flex:none;align-items:center;justify-content:center;box-sizing:border-box;width:22px;height:22px;padding:0;border:1.5px solid var(--dsw-alias-border-l2);border-radius:50%;background:var(--dsw-alias-bg-base);color:transparent;font:inherit;font-size:12px;line-height:18px;cursor:pointer;transition:border-color .12s ease,background-color .12s ease,color .12s ease}
+.dsh-calendar-check:hover{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.dsh-calendar-check.is-done{border-color:var(--dsw-alias-state-success-primary);background:var(--dsw-alias-state-success-primary);color:var(--dsw-alias-bg-base)}
+.dsh-calendar-check:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+.dsh-calendar-del{appearance:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer}
+.dsh-calendar-del:hover{background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent);color:var(--dsw-alias-state-error-primary)}
+.dsh-calendar-del:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.dsh-calendar-empty{display:flex;flex-direction:column;align-items:center;gap:8px;box-sizing:border-box;padding:22px 12px;text-align:center;border:1px dashed var(--dsw-alias-border-l1);border-radius:13px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent)}
+.dsh-calendar-empty-icon{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:14px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);color:var(--dsw-alias-brand-primary)}
+.dsh-calendar-log{display:flex;flex-direction:column;gap:6px}
+.dsh-calendar-log-item{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:8px 11px;border:1px solid var(--dsw-alias-border-l1);border-left:3px solid var(--dsw-alias-brand-primary);border-radius:11px;background:var(--dsw-alias-bg-base)}
+.dsh-calendar-log-time{font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
+.dsh-calendar-log-label{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-calendar-log-duration{margin-left:auto;font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dsh-calendar-total{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dsh-calendar-total-value{font-size:30px;line-height:36px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.dsh-calendar-total-caption{font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary)}
+.dsh-calendar-chart{display:flex;align-items:flex-end;gap:6px;box-sizing:border-box;height:118px;padding:10px 6px 0;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.dsh-calendar-chart-col{display:flex;flex:1 1 0;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;height:100%;min-width:0}
+.dsh-calendar-chart-track{display:flex;flex:1 1 auto;align-items:flex-end;justify-content:center;width:100%;min-height:0}
+.dsh-calendar-chart-bar{width:min(100%,34px);border-radius:9px 9px 4px 4px;background:linear-gradient(180deg, color-mix(in srgb, var(--dsw-alias-brand-primary) 88%, transparent), color-mix(in srgb, var(--dsw-alias-brand-primary) 32%, transparent));transition:height .35s ease}
+.dsh-calendar-chart-col.is-today .dsh-calendar-chart-bar{background:linear-gradient(180deg, var(--dsw-alias-state-success-primary), color-mix(in srgb, var(--dsw-alias-state-success-primary) 35%, transparent));box-shadow:0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-success-primary) 22%, transparent)}
+.dsh-calendar-chart-day{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dsh-calendar-chart-col.is-today .dsh-calendar-chart-day{color:var(--dsw-alias-state-success-primary);font-weight:600}
+.dsh-calendar-chart-caption{margin:6px 0 0;font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
+.dsh-calendar-bars{display:flex;flex-direction:column;gap:9px}
+.dsh-calendar-bar-row{display:flex;flex-direction:column;gap:4px}
+.dsh-calendar-bar-head{display:flex;align-items:baseline;gap:8px;font-size:12px;line-height:17px}
+.dsh-calendar-bar-label{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-calendar-bar-value{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dsh-calendar-bar-track{height:7px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);overflow:hidden}
+.dsh-calendar-bar-fill{height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary)}
 .dsh-calendar-help{display:flex;flex-direction:column;gap:12px;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px}
 .dsh-calendar-help-card{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1)}
 .dsh-calendar-chip-wrap{position:fixed;right:22px;bottom:22px;z-index:2147483000;display:flex;pointer-events:none}
@@ -254,61 +455,9 @@ window.__ModuleLoader__.load({
 .dsh-calendar-chip.is-bad .dsh-calendar-chip-dot{background:var(--dsw-alias-state-error-primary)}
 .dsh-calendar-chip-time{font-variant-numeric:tabular-nums;font-weight:600;font-size:15px;line-height:20px}
 .dsh-calendar-chip-label{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);font-size:12px}
-@media (max-width:1024px){.dsh-calendar-grid{grid-template-columns:minmax(0,1fr)}}
-.dsh-calendar-card{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1)}
-.dsh-calendar-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.dsh-calendar-label{font-weight:600}
-.dsh-calendar-hint{margin:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:17px}
-.dsh-calendar-note{margin:0;font-size:12px;line-height:17px;color:var(--dsw-alias-state-success-primary)}
-.dsh-calendar-note.is-bad{color:var(--dsw-alias-state-error-primary)}
-.dsh-calendar-error{margin:0;font-size:12px;line-height:17px;color:var(--dsw-alias-state-error-primary)}
-.dsh-calendar-pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:var(--dsw-alias-bg-layer-2);font-size:12px;line-height:17px;white-space:nowrap}
-.dsh-calendar-pill.is-on{border-color:var(--dsw-alias-brand-primary);background:color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent)}
-.dsh-calendar-pill.is-warn{border-color:var(--dsw-alias-state-warn-primary);background:color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent)}
-.dsh-calendar-pill.is-bad{border-color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent)}
-.dsh-calendar-form{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.dsh-calendar-input{flex:1 1 180px;min-width:120px;box-sizing:border-box;height:32px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}
-.dsh-calendar-input::placeholder{color:var(--dsw-alias-label-secondary)}
-.dsh-calendar-input:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
-.dsh-calendar-input:disabled{opacity:.6}
-.dsh-calendar-input.is-time{flex:0 0 110px;min-width:100px}
-.dsh-calendar-input.is-number{flex:0 0 92px;min-width:80px}
-.dsh-calendar-input.is-title{flex:1 1 100%}
-.dsh-calendar-input.is-note{flex:1 1 120px;min-width:100px}
-.dsh-calendar-button{appearance:none;box-sizing:border-box;height:32px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer;transition:background-color .12s ease,border-color .12s ease}
-.dsh-calendar-button:hover:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent)}
-.dsh-calendar-button:active:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-label-primary) 16%, transparent)}
-.dsh-calendar-button:disabled{opacity:.55;cursor:default}
-.dsh-calendar-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
-.dsh-calendar-button.is-primary{border-color:var(--dsw-alias-brand-primary);background:color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent)}
-.dsh-calendar-button.is-danger{border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary)}
-.dsh-calendar-button.is-ghost{border-color:transparent;background:transparent;color:var(--dsw-alias-label-secondary)}
-.dsh-calendar-list{display:flex;flex-direction:column;gap:6px}
-.dsh-calendar-event{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-base)}
-.dsh-calendar-event.is-done{opacity:.62}
-.dsh-calendar-event.is-done .dsh-calendar-event-title{text-decoration:line-through}
-.dsh-calendar-check{appearance:none;box-sizing:border-box;width:24px;height:24px;padding:0;border:1px solid var(--dsw-alias-border-l2);border-radius:50%;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;cursor:pointer;flex:0 0 auto}
-.dsh-calendar-event.is-done .dsh-calendar-check{border-color:var(--dsw-alias-state-success-primary);color:var(--dsw-alias-state-success-primary)}
-.dsh-calendar-event-time{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
-.dsh-calendar-event-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsh-calendar-event-meta{font-size:11.5px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
-.dsh-calendar-event-note{flex:1 1 140px;min-width:100px;font-size:12px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsh-calendar-event .dsh-calendar-button{height:26px;padding:0 9px;font-size:12px;margin-left:auto}
-.dsh-calendar-timer{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.dsh-calendar-counter{font-size:34px;line-height:38px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.5px}
-.dsh-calendar-counter.is-bad{color:var(--dsw-alias-state-error-primary)}
-.dsh-calendar-log{display:flex;flex-direction:column;gap:6px}
-.dsh-calendar-log-item{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-base)}
-.dsh-calendar-badge{display:inline-flex;align-items:center;padding:1px 7px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
-.dsh-calendar-bars{display:flex;flex-direction:column;gap:7px}
-.dsh-calendar-bar-row{display:flex;flex-direction:column;gap:3px}
-.dsh-calendar-bar-head{display:flex;align-items:baseline;gap:8px;font-size:12px;line-height:17px}
-.dsh-calendar-bar-label{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsh-calendar-bar-value{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary);white-space:nowrap}
-.dsh-calendar-bar-track{height:6px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);overflow:hidden}
-.dsh-calendar-bar-fill{height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary)}
-.dsh-calendar-summary{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
-.dsh-calendar-badge.is-on{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+@media (max-width:980px){.dsh-calendar-layout{grid-template-columns:minmax(0,1fr)}.dsh-calendar-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.dsh-calendar-hero{padding-top:18px}.dsh-calendar-actions{justify-content:flex-start;margin-left:0}.dsh-calendar-content{gap:14px;padding:0 14px 56px}.dsh-calendar-card{padding:14px}.dsh-calendar-dial{width:148px;height:148px}.dsh-calendar-dial-time{font-size:28px;line-height:32px}.dsh-calendar-tl-item{grid-template-columns:44px 12px minmax(0,1fr) auto;gap:7px}.dsh-calendar-tl-actions{opacity:1}.dsh-calendar-chart{height:96px;gap:4px}}
+@media (max-width:520px){.dsh-calendar-stats{grid-template-columns:minmax(0,1fr)}}
 `;
 
     /** Locale lookup with a literal fallback, so a missing dictionary never prints a key. */
@@ -346,6 +495,113 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** Clock glyph: stat card and field icons. */
+    function ClockIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('circle', { cx: 8, cy: 8, r: 5.75, stroke: 'currentColor', strokeWidth: 1.3 }),
+        h('path', { d: 'M8 4.75V8l2.2 1.3', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round', strokeLinejoin: 'round' })
+      );
+    }
+
+    /** Check mark glyph: «выполнено». */
+    function CheckIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('circle', { cx: 8, cy: 8, r: 5.75, stroke: 'currentColor', strokeWidth: 1.3 }),
+        h('path', { d: 'M5.4 8.1l1.8 1.8 3.5-3.7', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round' })
+      );
+    }
+
+    /** List glyph: journal and note fields. */
+    function ListIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('path', { d: 'M5.5 4h8M5.5 8h8M5.5 12h8', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round' }),
+        h('circle', { cx: 2.6, cy: 4, r: 0.9, fill: 'currentColor' }),
+        h('circle', { cx: 2.6, cy: 8, r: 0.9, fill: 'currentColor' }),
+        h('circle', { cx: 2.6, cy: 12, r: 0.9, fill: 'currentColor' })
+      );
+    }
+
+    /** Bar-chart glyph: the report card. */
+    function ChartIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('path', { d: 'M2 13.25h12', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round' }),
+        h('path', { d: 'M4.2 11V8.4M7 11V5.2M9.8 11V6.8M12.6 11V3.75', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' })
+      );
+    }
+
+    /** Plus glyph: add buttons. */
+    function PlusIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('path', { d: 'M8 3.5v9M3.5 8h9', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' })
+      );
+    }
+
+    /** Trash glyph: the hover delete button of an event. */
+    function TrashIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('path', { d: 'M3.5 4.75h9M6.25 4.75V3.5h3.5v1.25M5 4.75l.55 7.5h4.9L11 4.75', stroke: 'currentColor', strokeWidth: 1.25, strokeLinecap: 'round', strokeLinejoin: 'round' })
+      );
+    }
+
+    /** Refresh glyph: the header button. */
+    function RefreshIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('path', { d: 'M13.1 8a5.1 5.1 0 1 1-1.5-3.6', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round' }),
+        h('path', { d: 'M13.25 2.9v2.9h-2.9', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round', strokeLinejoin: 'round' })
+      );
+    }
+
+    /** Play glyph: the big timer button. */
+    function PlayIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('path', { d: 'M5.5 3.8l7 4.2-7 4.2z', fill: 'currentColor', stroke: 'currentColor', strokeWidth: 1.1, strokeLinejoin: 'round' })
+      );
+    }
+
+    /** Pause glyph: the big timer button. */
+    function PauseIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('path', { d: 'M5.75 3.5v9M10.25 3.5v9', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' })
+      );
+    }
+
+    /** Stop glyph: the big timer button when the time is up. */
+    function StopIcon(props) {
+      const size = Number(props?.size) || 16;
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, focusable: false },
+        h('rect', { x: 4, y: 4, width: 8, height: 8, rx: 1.6, fill: 'currentColor' })
+      );
+    }
+
     /** Two-digit padding. */
     function pad2(value) {
       return String(value).padStart(2, '0');
@@ -379,6 +635,50 @@ window.__ModuleLoader__.load({
       if (hours === 0) return `${minutes} ${t('minutesShort')}`;
       if (rest === 0) return `${hours} ${t('hoursShort')}`;
       return `${hours} ${t('hoursShort')} ${pad2(rest)} ${t('minutesShort')}`;
+    }
+
+    /**
+     * Date as `DD.MM.YYYY` in local time.
+     * @param date - moment to print.
+     * @returns the date text.
+     */
+    function dateText(date) {
+      return `${pad2(date.getDate())}.${pad2(date.getMonth() + 1)}.${date.getFullYear()}`;
+    }
+
+    /**
+     * Greeting key for the hour of the day.
+     * @param hours - local hour 0–23.
+     * @returns the dictionary key.
+     */
+    function greetingKey(hours) {
+      if (hours >= 5 && hours < 12) return 'greetingMorning';
+      if (hours >= 12 && hours < 18) return 'greetingDay';
+      if (hours >= 18 && hours < 23) return 'greetingEvening';
+      return 'greetingNight';
+    }
+
+    /** Local Monday 00:00 of the week containing a moment. */
+    function weekStartOf(date) {
+      const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const shift = (start.getDay() + 6) % 7;
+      return new Date(start.getFullYear(), start.getMonth(), start.getDate() - shift);
+    }
+
+    /**
+     * Seven empty weekday buckets, used before the first snapshot arrives.
+     * @returns Monday-first buckets `{ date, weekday, durationSec, isToday }`.
+     */
+    function emptyWeekBuckets() {
+      const now = new Date();
+      const monday = weekStartOf(now);
+      const todayKey = dateText(now);
+      const buckets = [];
+      for (let index = 0; index < 7; index += 1) {
+        const day = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index);
+        buckets.push({ date: dateText(day), weekday: index, durationSec: 0, isToday: dateText(day) === todayKey });
+      }
+      return buckets;
     }
 
     /** A short beep at the end of a run; never throws, never blocks the page. */
@@ -482,7 +782,7 @@ window.__ModuleLoader__.load({
         );
       }
 
-      /** The full section: today, timer, time log and report. */
+      /** The full section: header, stat cards, today, timer, time log and report. */
       function CalendarPage() {
         const [snapshot, setSnapshot] = React.useState(null);
         const [phase, setPhase] = React.useState('loading');
@@ -556,6 +856,8 @@ window.__ModuleLoader__.load({
         const addEvent = () => {
           const title = draft.title.trim();
           if (title === '') return;
+          const minutes = Number(draft.durationMin);
+          if (draft.durationMin !== '' && (!Number.isFinite(minutes) || minutes < 5 || minutes > 1440)) return;
           return run('add', async () => {
             try {
               const payload = await call(EVENT_ADD_PATH, {
@@ -692,7 +994,7 @@ window.__ModuleLoader__.load({
         const liveRemaining = Math.max(0, timer.remainingSec - extraSec);
         const liveElapsed = timer.elapsedSec + extraSec;
         const expired = timer.mode !== 'idle' && (timer.expired === true || (running && liveRemaining <= 0));
-        // While idle the counter previews the length the next start would use.
+        // While idle the dial previews the length the next start would use.
         const idleSeconds = timerMode === 'break'
           ? 5 * 60
           : timerMode === 'custom'
@@ -700,13 +1002,24 @@ window.__ModuleLoader__.load({
             : 25 * 60;
         const counterSeconds = expired ? 0 : timer.mode === 'idle' ? idleSeconds : liveRemaining;
         const elapsedSeconds = timer.mode === 'idle' ? 0 : liveElapsed;
-        const timerStatusClass = expired
-          ? 'dsh-calendar-pill is-bad'
-          : timer.paused === true
-            ? 'dsh-calendar-pill is-warn'
-            : timer.mode !== 'idle'
-              ? 'dsh-calendar-pill is-on'
-              : 'dsh-calendar-pill';
+        const timerDurationSec = timer.mode === 'idle'
+          ? idleSeconds
+          : Math.max(1, Number(timer.durationSec) || Math.round((Number(timer.durationMin) || 0) * 60) || idleSeconds);
+        const progress = timer.mode === 'idle'
+          ? 0
+          : expired
+            ? 1
+            : Math.min(1, Math.max(0, liveElapsed / timerDurationSec));
+        const ringOffset = RING_LENGTH * (1 - progress);
+        const dialMode = timer.mode === 'idle'
+          ? timerMode === 'break'
+            ? t('defaultBreakLabel')
+            : timerMode === 'custom'
+              ? t('timerModeCustom')
+              : t('defaultWorkLabel')
+          : timer.mode === 'break'
+            ? t('defaultBreakLabel')
+            : t('defaultWorkLabel');
         const timerStatus = expired
           ? t('timerExpired')
           : timer.mode === 'idle'
@@ -714,6 +1027,18 @@ window.__ModuleLoader__.load({
             : timer.paused === true
               ? t('timerPaused')
               : t('timerRunning');
+        const statusVariant = expired
+          ? 'is-bad'
+          : timer.paused === true && timer.mode !== 'idle'
+            ? 'is-warn'
+            : running
+              ? 'is-on'
+              : '';
+        const dialVariant = expired
+          ? ' is-expired'
+          : timer.paused === true && timer.mode !== 'idle'
+            ? ' is-paused'
+            : '';
 
         // The finish is announced once per run: a sound and a line in the page.
         React.useEffect(() => {
@@ -727,12 +1052,12 @@ window.__ModuleLoader__.load({
         }, [expired, timer.mode, timer.startedAt, timer.durationSec, timer.expired]);
 
         const bigAction = expired
-          ? { label: t('timerStopAction'), primary: true, run: stopTimer }
+          ? { label: t('timerStopAction'), Icon: StopIcon, run: stopTimer }
           : timer.mode === 'idle'
-            ? { label: t('timerStartAction'), primary: true, run: startSelected }
+            ? { label: t('timerStartAction'), Icon: PlayIcon, run: startSelected }
             : timer.paused === true
-              ? { label: t('timerResumeAction'), primary: true, run: () => timerAction('resume') }
-              : { label: t('timerPauseAction'), primary: false, run: () => timerAction('pause') };
+              ? { label: t('timerResumeAction'), Icon: PlayIcon, run: () => timerAction('resume') }
+              : { label: t('timerPauseAction'), Icon: PauseIcon, run: () => timerAction('pause') };
 
         const entries = Array.isArray(snapshot?.logToday?.entries) ? snapshot.logToday.entries : [];
         const logTotalSec = Number(snapshot?.logToday?.totalSec) || 0;
@@ -740,16 +1065,525 @@ window.__ModuleLoader__.load({
           ? fetchedReport
           : (snapshot?.report?.[range] ?? null);
         const reportLabels = Array.isArray(activeReport?.byLabel) ? activeReport.byLabel : [];
+        const weekReportDays = Array.isArray(snapshot?.report?.week?.days) ? snapshot.report.week.days : [];
+        const activeDays = Array.isArray(activeReport?.days) && activeReport.days.length === 7 ? activeReport.days : weekReportDays;
+        const chartDays = activeDays.length === 7 ? activeDays : emptyWeekBuckets();
+        const chartMax = Math.max(1, ...chartDays.map(day => Math.max(0, Number(day.durationSec) || 0)));
+        const durationInvalid = draft.durationMin !== ''
+          && (!Number.isFinite(Number(draft.durationMin)) || Number(draft.durationMin) < 5 || Number(draft.durationMin) > 1440);
+        const nowLocal = new Date();
+        const dateLine = `${t(WEEKDAY_LONG_KEYS[nowLocal.getDay()])}, ${dateText(nowLocal)}`;
+        const greeting = t(greetingKey(nowLocal.getHours()));
 
+        /** One stat card: big number, small caption and an accent icon. */
+        const statCard = (variant, Icon, label, value) => h(
+          'div',
+          { className: `dsh-calendar-stat ${variant}` },
+          h('span', { className: 'dsh-calendar-stat-icon' }, h(Icon, { size: 17 })),
+          h(
+            'div',
+            { className: 'dsh-calendar-stat-body' },
+            h('span', { className: 'dsh-calendar-stat-value' }, value),
+            h('span', { className: 'dsh-calendar-stat-label' }, label)
+          )
+        );
+
+        /** One mode chip of the segmented timer control. */
         const modeButton = (value, label) => h(
           'button',
           {
             type: 'button',
-            className: timerMode === value ? 'dsh-calendar-button is-primary' : 'dsh-calendar-button',
+            className: timerMode === value ? 'dsh-calendar-seg-btn is-active' : 'dsh-calendar-seg-btn',
             disabled: busy !== '',
+            'aria-pressed': timerMode === value,
             onClick: () => setTimerMode(value)
           },
           label
+        );
+
+        const ring = h(
+          'svg',
+          { className: 'dsh-calendar-ring', viewBox: '0 0 160 160', 'aria-hidden': true, focusable: false },
+          h('circle', { className: 'dsh-calendar-ring-track', cx: 80, cy: 80, r: RING_RADIUS, fill: 'none', strokeWidth: RING_STROKE }),
+          h('circle', {
+            className: 'dsh-calendar-ring-bar',
+            cx: 80,
+            cy: 80,
+            r: RING_RADIUS,
+            fill: 'none',
+            strokeWidth: RING_STROKE,
+            strokeLinecap: 'round',
+            strokeDasharray: `${RING_LENGTH.toFixed(2)} ${RING_LENGTH.toFixed(2)}`,
+            strokeDashoffset: ringOffset.toFixed(2),
+            transform: 'rotate(-90 80 80)'
+          })
+        );
+
+        const addForm = h(
+          'div',
+          { className: 'dsh-calendar-add' },
+          h(
+            'div',
+            { className: 'dsh-calendar-add-row' },
+            h('span', { className: 'dsh-calendar-add-title' }, t('addTitle'))
+          ),
+          h(
+            'div',
+            { className: 'dsh-calendar-add-row' },
+            h(
+              'label',
+              { className: 'dsh-calendar-field' },
+              h('span', { className: 'dsh-calendar-field-icon' }, h(CalendarIcon, { size: 14 })),
+              h('input', {
+                className: 'dsh-calendar-input',
+                placeholder: t('titlePlaceholder'),
+                value: draft.title,
+                disabled: busy !== '',
+                onChange: event => setDraft({ ...draft, title: event.target.value })
+              })
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'dsh-calendar-button is-primary',
+                disabled: busy !== '' || draft.title.trim() === '' || durationInvalid,
+                onClick: () => void addEvent()
+              },
+              h(PlusIcon, { size: 14 }),
+              h('span', null, busy === 'add' ? t('adding') : t('addButton'))
+            )
+          ),
+          h(
+            'div',
+            { className: 'dsh-calendar-add-row' },
+            h(
+              'label',
+              { className: 'dsh-calendar-field is-time' },
+              h('span', { className: 'dsh-calendar-field-icon' }, h(ClockIcon, { size: 14 })),
+              h('input', {
+                className: 'dsh-calendar-input',
+                type: 'time',
+                title: t('timeLabel'),
+                value: draft.time,
+                disabled: busy !== '',
+                onChange: event => setDraft({ ...draft, time: event.target.value })
+              })
+            ),
+            h(
+              'label',
+              { className: 'dsh-calendar-field is-number' },
+              h('span', { className: 'dsh-calendar-field-icon' }, h(ClockIcon, { size: 14 })),
+              h('input', {
+                className: 'dsh-calendar-input',
+                type: 'number',
+                min: 5,
+                max: 1440,
+                title: t('durationLabel'),
+                value: draft.durationMin,
+                disabled: busy !== '',
+                onChange: event => setDraft({ ...draft, durationMin: event.target.value })
+              })
+            ),
+            h(
+              'label',
+              { className: 'dsh-calendar-field' },
+              h('span', { className: 'dsh-calendar-field-icon' }, h(ListIcon, { size: 14 })),
+              h('input', {
+                className: 'dsh-calendar-input',
+                placeholder: t('notePlaceholder'),
+                value: draft.note,
+                disabled: busy !== '',
+                onChange: event => setDraft({ ...draft, note: event.target.value })
+              })
+            )
+          ),
+          durationInvalid ? h('p', { className: 'dsh-calendar-error' }, t('invalidDuration')) : null
+        );
+
+        const timeline = h(
+          'div',
+          { className: 'dsh-calendar-timeline' },
+          events.length === 0
+            ? h(
+              'div',
+              { className: 'dsh-calendar-empty' },
+              h('span', { className: 'dsh-calendar-empty-icon' }, h(CalendarIcon, { size: 22 })),
+              h('p', { className: 'dsh-calendar-hint' }, t('noEvents'))
+            )
+            : events.map((event, index) => h(
+              'div',
+              {
+                key: event.id,
+                className: event.done === true ? 'dsh-calendar-tl-item is-done' : 'dsh-calendar-tl-item',
+                style: { '--dsh-calendar-accent': TIMELINE_ACCENTS[index % TIMELINE_ACCENTS.length] }
+              },
+              h('span', { className: 'dsh-calendar-tl-time' }, event.time),
+              h('span', { className: 'dsh-calendar-tl-rail' }, h('span', { className: 'dsh-calendar-tl-dot' })),
+              h(
+                'div',
+                { className: 'dsh-calendar-tl-main' },
+                h(
+                  'div',
+                  { className: 'dsh-calendar-tl-head' },
+                  h('button', {
+                    type: 'button',
+                    className: event.done === true ? 'dsh-calendar-check is-done' : 'dsh-calendar-check',
+                    title: event.done === true ? t('markOpen') : t('markDone'),
+                    disabled: busy !== '',
+                    onClick: () => void toggleEvent(event)
+                  }, event.done === true ? t('doneMark') : ''),
+                  h('span', { className: 'dsh-calendar-tl-title' }, event.title),
+                  h('span', { className: 'dsh-calendar-tl-meta' }, `${event.endTime} · ${durationText(event.durationMin * 60, t)}`)
+                ),
+                event.note ? h('p', { className: 'dsh-calendar-tl-note' }, event.note) : null
+              ),
+              h(
+                'div',
+                { className: 'dsh-calendar-tl-actions' },
+                confirmId === event.id
+                  ? h(
+                    'div',
+                    { className: 'dsh-calendar-row' },
+                    h('span', { className: 'dsh-calendar-hint' }, t('confirmRemove')),
+                    h('button', {
+                      type: 'button',
+                      className: 'dsh-calendar-button is-danger',
+                      disabled: busy !== '',
+                      onClick: () => void removeEvent(event)
+                    }, t('yes')),
+                    h('button', {
+                      type: 'button',
+                      className: 'dsh-calendar-button',
+                      onClick: () => setConfirmId('')
+                    }, t('no'))
+                  )
+                  : h('button', {
+                    type: 'button',
+                    className: 'dsh-calendar-del',
+                    title: t('deleteEvent'),
+                    'aria-label': t('deleteEvent'),
+                    disabled: busy !== '',
+                    onClick: () => setConfirmId(event.id)
+                  }, h(TrashIcon, { size: 15 }))
+              )
+            ))
+        );
+
+        const todayCard = h(
+          'div',
+          { className: 'dsh-calendar-card' },
+          h(
+            'div',
+            { className: 'dsh-calendar-card-head' },
+            h('span', { className: 'dsh-calendar-card-icon' }, h(CalendarIcon, { size: 15 })),
+            h('span', { className: 'dsh-calendar-card-title' }, t('todayTitle')),
+            h('span', { className: 'dsh-calendar-card-sub' }, `${doneCount} / ${events.length} ${t('doneOf')}`)
+          ),
+          addForm,
+          timeline
+        );
+
+        const timerCard = h(
+          'div',
+          { className: 'dsh-calendar-card' },
+          h(
+            'div',
+            { className: 'dsh-calendar-card-head' },
+            h('span', { className: 'dsh-calendar-card-icon' }, h(ClockIcon, { size: 15 })),
+            h('span', { className: 'dsh-calendar-card-title' }, t('timerTitle')),
+            h('span', { className: 'dsh-calendar-card-sub' }, t('counterRemaining'))
+          ),
+          h(
+            'div',
+            { className: 'dsh-calendar-timer-hero' },
+            h(
+              'div',
+              { className: `dsh-calendar-dial${dialVariant}` },
+              ring,
+              h(
+                'div',
+                { className: 'dsh-calendar-dial-text' },
+                h('span', { className: expired ? 'dsh-calendar-dial-time is-bad' : 'dsh-calendar-dial-time' }, formatCounter(counterSeconds)),
+                h('span', { className: 'dsh-calendar-dial-mode' }, `${dialMode} · ${Math.max(1, Math.round(timerDurationSec / 60))} ${t('minutesShort')}`),
+                running ? h('span', { className: 'dsh-calendar-pulse', 'aria-hidden': true }) : null
+              )
+            ),
+            h(
+              'div',
+              { className: 'dsh-calendar-timer-meta' },
+              h('span', { className: 'dsh-calendar-hint' }, `${t('counterRemaining')} · ${t('counterElapsed')} ${formatCounter(elapsedSeconds)}`),
+              expired && timer.mode !== 'idle'
+                ? h('p', { className: 'dsh-calendar-note is-bad' }, timer.expired === true ? t('timerExpiredNotice') : t('timerFinishedNotice'))
+                : h('span', { className: 'dsh-calendar-hint' }, timer.mode === 'idle' ? t('timerIdle') : timerStatus)
+            )
+          ),
+          h(
+            'div',
+            { className: 'dsh-calendar-timer-controls' },
+            h(
+              'div',
+              { className: 'dsh-calendar-seg', role: 'group' },
+              modeButton('work', t('timerModeWork')),
+              modeButton('break', t('timerModeBreak')),
+              modeButton('custom', t('timerModeCustom')),
+              timerMode === 'custom'
+                ? h('input', {
+                  className: 'dsh-calendar-input',
+                  type: 'number',
+                  min: 1,
+                  max: 720,
+                  title: t('customMinutesLabel'),
+                  'aria-label': t('customMinutesLabel'),
+                  value: customMinutes,
+                  disabled: busy !== '',
+                  onChange: event => setCustomMinutes(event.target.value)
+                })
+                : null
+            ),
+            h(
+              'label',
+              { className: 'dsh-calendar-field' },
+              h('span', { className: 'dsh-calendar-field-icon' }, h(ListIcon, { size: 14 })),
+              h('input', {
+                className: 'dsh-calendar-input',
+                placeholder: t('labelPlaceholder'),
+                value: labelDraft,
+                disabled: busy !== '',
+                onChange: event => setLabelDraft(event.target.value)
+              })
+            ),
+            h(
+              'div',
+              { className: 'dsh-calendar-timer-buttons' },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dsh-calendar-primary',
+                  disabled: busy !== '',
+                  onClick: () => void bigAction.run()
+                },
+                h(bigAction.Icon, { size: 15 }),
+                h('span', null, busy === 'timer' ? t('loading') : bigAction.label)
+              ),
+              timer.mode !== 'idle' && !expired
+                ? h('button', {
+                  type: 'button',
+                  className: 'dsh-calendar-button is-danger',
+                  disabled: busy !== '',
+                  onClick: () => void stopTimer()
+                }, t('timerStopAction'))
+                : null
+            )
+          )
+        );
+
+        const logCard = h(
+          'div',
+          { className: 'dsh-calendar-card' },
+          h(
+            'div',
+            { className: 'dsh-calendar-card-head' },
+            h('span', { className: 'dsh-calendar-card-icon' }, h(ListIcon, { size: 15 })),
+            h('span', { className: 'dsh-calendar-card-title' }, t('logTitle')),
+            h('span', { className: 'dsh-calendar-card-sub' }, `${t('logTotal')} ${durationText(logTotalSec, t)}`)
+          ),
+          entries.length === 0
+            ? h(
+              'div',
+              { className: 'dsh-calendar-empty' },
+              h('span', { className: 'dsh-calendar-empty-icon' }, h(ClockIcon, { size: 22 })),
+              h('p', { className: 'dsh-calendar-hint' }, t('logEmpty'))
+            )
+            : h(
+              'div',
+              { className: 'dsh-calendar-log' },
+              entries.map(entry => h(
+                'div',
+                { key: entry.id, className: 'dsh-calendar-log-item' },
+                h('span', { className: 'dsh-calendar-log-time' }, `${entry.startTime}–${entry.endTime}`),
+                h('span', { className: 'dsh-calendar-log-label' }, entry.label),
+                h('span', { className: 'dsh-calendar-log-duration' }, durationText(entry.durationSec, t)),
+                h('span', { className: 'dsh-calendar-badge' }, entry.source === 'manual' ? t('logSourceManual') : t('logSourceTimer'))
+              ))
+            ),
+          h('span', { className: 'dsh-calendar-hint' }, t('logAddTitle')),
+          h(
+            'div',
+            { className: 'dsh-calendar-add' },
+            h(
+              'div',
+              { className: 'dsh-calendar-add-row' },
+              h(
+                'label',
+                { className: 'dsh-calendar-field' },
+                h('span', { className: 'dsh-calendar-field-icon' }, h(ListIcon, { size: 14 })),
+                h('input', {
+                  className: 'dsh-calendar-input',
+                  placeholder: t('logLabelPlaceholder'),
+                  value: logDraft.label,
+                  disabled: busy !== '',
+                  onChange: event => setLogDraft({ ...logDraft, label: event.target.value })
+                })
+              ),
+              h(
+                'label',
+                { className: 'dsh-calendar-field is-number' },
+                h('span', { className: 'dsh-calendar-field-icon' }, h(ClockIcon, { size: 14 })),
+                h('input', {
+                  className: 'dsh-calendar-input',
+                  type: 'number',
+                  min: 1,
+                  max: 1440,
+                  title: t('logMinutesPlaceholder'),
+                  placeholder: t('logMinutesPlaceholder'),
+                  value: logDraft.minutes,
+                  disabled: busy !== '',
+                  onChange: event => setLogDraft({ ...logDraft, minutes: event.target.value })
+                })
+              ),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dsh-calendar-button is-primary',
+                  disabled: busy !== '' || logDraft.label.trim() === '' || !(Number(logDraft.minutes) > 0),
+                  onClick: () => void addLog()
+                },
+                h(PlusIcon, { size: 14 }),
+                h('span', null, busy === 'log' ? t('logAdding') : t('logAddButton'))
+              )
+            )
+          )
+        );
+
+        const chartColumns = chartDays.map((day, index) => {
+          const seconds = Math.max(0, Number(day.durationSec) || 0);
+          const height = seconds === 0 ? 4 : Math.max(8, Math.round((seconds / chartMax) * 100));
+          // Host buckets start on Monday; the short weekday keys start on Sunday.
+          const dayName = t(WEEKDAY_SHORT_KEYS[(index + 1) % 7]);
+          return h(
+            'div',
+            {
+              key: `day-${index}`,
+              className: day.isToday === true ? 'dsh-calendar-chart-col is-today' : 'dsh-calendar-chart-col'
+            },
+            h(
+              'div',
+              { className: 'dsh-calendar-chart-track' },
+              h('div', {
+                className: 'dsh-calendar-chart-bar',
+                style: { height: `${height}%` },
+                title: `${dayName} · ${durationText(seconds, t)}`
+              })
+            ),
+            h('span', { className: 'dsh-calendar-chart-day' }, dayName)
+          );
+        });
+
+        const reportCard = h(
+          'div',
+          { className: 'dsh-calendar-card' },
+          h(
+            'div',
+            { className: 'dsh-calendar-card-head' },
+            h('span', { className: 'dsh-calendar-card-icon' }, h(ChartIcon, { size: 15 })),
+            h('span', { className: 'dsh-calendar-card-title' }, t('reportTitle')),
+            h(
+              'div',
+              { className: 'dsh-calendar-seg' },
+              h('button', {
+                type: 'button',
+                className: range === 'today' ? 'dsh-calendar-seg-btn is-active' : 'dsh-calendar-seg-btn',
+                'aria-pressed': range === 'today',
+                onClick: () => showReport('today')
+              }, t('rangeToday')),
+              h('button', {
+                type: 'button',
+                className: range === 'week' ? 'dsh-calendar-seg-btn is-active' : 'dsh-calendar-seg-btn',
+                'aria-pressed': range === 'week',
+                onClick: () => showReport('week')
+              }, t('rangeWeek'))
+            )
+          ),
+          activeReport === null
+            ? h('p', { className: 'dsh-calendar-hint' }, t('loading'))
+            : h(
+              'div',
+              { className: 'dsh-calendar-total' },
+              h('span', { className: 'dsh-calendar-total-value' }, durationText(activeReport.totalSec, t)),
+              h('span', { className: 'dsh-calendar-total-caption' }, `${t('reportEntriesCount')} ${activeReport.count}`)
+            ),
+          h(
+            'div',
+            null,
+            h(
+              'div',
+              { className: 'dsh-calendar-chart', role: 'img', 'aria-label': t('reportChartCaption') },
+              chartColumns
+            ),
+            h('p', { className: 'dsh-calendar-chart-caption' }, t('reportChartCaption'))
+          ),
+          activeReport !== null && reportLabels.length === 0
+            ? h('p', { className: 'dsh-calendar-hint' }, t('reportEmpty'))
+            : null,
+          activeReport !== null && reportLabels.length > 0
+            ? h(
+              'div',
+              { className: 'dsh-calendar-bars' },
+              reportLabels.map(row => h(
+                'div',
+                { key: row.label, className: 'dsh-calendar-bar-row' },
+                h(
+                  'div',
+                  { className: 'dsh-calendar-bar-head' },
+                  h('span', { className: 'dsh-calendar-bar-label' }, row.label),
+                  h('span', { className: 'dsh-calendar-bar-value' },
+                    `${durationText(row.durationSec, t)} · ${Math.round((Number(row.share) || 0) * 100)}%`)
+                ),
+                h('div', { className: 'dsh-calendar-bar-track' },
+                  h('div', {
+                    className: 'dsh-calendar-bar-fill',
+                    style: { width: `${Math.max(2, Math.round((Number(row.share) || 0) * 100))}%` }
+                  }))
+              ))
+            )
+            : null
+        );
+
+        const hero = h(
+          'div',
+          { className: 'dsh-calendar-hero' },
+          h('span', { className: 'dsh-calendar-logo is-large' }, h(CalendarIcon, { size: 26 })),
+          h(
+            'div',
+            { className: 'dsh-calendar-hero-text' },
+            h('h1', null, t('pageTitle')),
+            h('p', { className: 'dsh-calendar-date' }, `${dateLine} · ${greeting}`),
+            h('p', { className: 'dsh-calendar-sub' }, t('hint'))
+          ),
+          h(
+            'div',
+            { className: 'dsh-calendar-actions' },
+            h(
+              'span',
+              { className: `dsh-calendar-status ${statusVariant}`.trim() },
+              h('span', { className: 'dsh-calendar-status-dot' }),
+              timerStatus
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'dsh-calendar-button',
+                disabled: busy !== '',
+                onClick: () => void run('refresh', refresh)
+              },
+              h(RefreshIcon, { size: 14 }),
+              h('span', null, busy === 'refresh' ? t('loading') : t('refresh'))
+            )
+          )
         );
 
         return h(
@@ -762,301 +1596,30 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'dsh-calendar-content' },
-              h(
-                'div',
-                { className: 'dsh-calendar-heading' },
-                h('span', { className: 'dsh-calendar-logo' }, h(CalendarIcon, { size: 20 })),
-                h(
-                  'div',
-                  { className: 'dsh-calendar-heading-main' },
-                  h('h1', null, t('pageTitle')),
-                  h('p', { className: 'dsh-calendar-sub' }, t('hint'))
-                ),
-                h(
-                  'div',
-                  { className: 'dsh-calendar-actions' },
-                  h('span', { className: timerStatusClass }, timerStatus),
-                  h('button', {
-                    type: 'button',
-                    className: 'dsh-calendar-button',
-                    disabled: busy !== '',
-                    onClick: () => void run('refresh', refresh)
-                  }, busy === 'refresh' ? t('loading') : t('refresh'))
-                )
-              ),
+              hero,
               phase === 'error'
                 ? h('p', { className: 'dsh-calendar-error' }, t('loadFailed'), ' ',
                   h('button', { type: 'button', className: 'dsh-calendar-button', onClick: () => void refresh() }, t('retry')))
                 : null,
               notice !== null
-                ? h('p', { className: notice.kind === 'ok' ? 'dsh-calendar-note' : 'dsh-calendar-note is-bad' }, notice.text)
+                ? h('p', { className: notice.kind === 'ok' ? 'dsh-calendar-note' : 'dsh-calendar-note is-bad', role: 'status' }, notice.text)
                 : null,
               h(
                 'div',
-                { className: 'dsh-calendar-grid' },
-          h(
-            'div',
-            { className: 'dsh-calendar-card' },
-            h(
-              'div',
-              { className: 'dsh-calendar-row' },
-              h('span', { className: 'dsh-calendar-label' }, t('todayTitle')),
-              h('span', { className: 'dsh-calendar-hint' }, `${t('todayCount')} ${events.length} · ${t('doneCount')} ${doneCount}`)
-            ),
-            h(
-              'div',
-              { className: 'dsh-calendar-form' },
-              h('span', { className: 'dsh-calendar-hint' }, t('addTitle')),
-              h('input', {
-                className: 'dsh-calendar-input is-title',
-                placeholder: t('titlePlaceholder'),
-                value: draft.title,
-                disabled: busy !== '',
-                onChange: event => setDraft({ ...draft, title: event.target.value })
-              }),
-              h('input', {
-                className: 'dsh-calendar-input is-time',
-                type: 'time',
-                title: t('timeLabel'),
-                value: draft.time,
-                disabled: busy !== '',
-                onChange: event => setDraft({ ...draft, time: event.target.value })
-              }),
-              h('input', {
-                className: 'dsh-calendar-input is-number',
-                type: 'number',
-                min: 5,
-                max: 1440,
-                title: t('durationLabel'),
-                value: draft.durationMin,
-                disabled: busy !== '',
-                onChange: event => setDraft({ ...draft, durationMin: event.target.value })
-              }),
-              h('input', {
-                className: 'dsh-calendar-input is-note',
-                placeholder: t('notePlaceholder'),
-                value: draft.note,
-                disabled: busy !== '',
-                onChange: event => setDraft({ ...draft, note: event.target.value })
-              }),
-              h('button', {
-                type: 'button',
-                className: 'dsh-calendar-button is-primary',
-                disabled: busy !== '' || draft.title.trim() === '',
-                onClick: () => void addEvent()
-              }, busy === 'add' ? t('adding') : t('addButton'))
-            ),
-            events.length === 0
-              ? h('p', { className: 'dsh-calendar-hint' }, t('noEvents'))
-              : h(
-                'div',
-                { className: 'dsh-calendar-list' },
-                events.map(event => h(
-                  'div',
-                  { key: event.id, className: event.done === true ? 'dsh-calendar-event is-done' : 'dsh-calendar-event' },
-                  h('button', {
-                    type: 'button',
-                    className: 'dsh-calendar-check',
-                    title: event.done === true ? t('markOpen') : t('markDone'),
-                    disabled: busy !== '',
-                    onClick: () => void toggleEvent(event)
-                  }, event.done === true ? t('doneMark') : t('undoneMark')),
-                  h('span', { className: 'dsh-calendar-event-time' }, `${event.time}–${event.endTime}`),
-                  h('span', { className: 'dsh-calendar-event-title' }, event.title),
-                  h('span', { className: 'dsh-calendar-event-meta' }, durationText(event.durationMin * 60, t)),
-                  event.note ? h('span', { className: 'dsh-calendar-event-note', title: event.note }, event.note) : null,
-                  confirmId === event.id
-                    ? h(
-                      'span',
-                      { className: 'dsh-calendar-row' },
-                      h('span', { className: 'dsh-calendar-hint' }, t('confirmRemove')),
-                      h('button', {
-                        type: 'button',
-                        className: 'dsh-calendar-button is-danger',
-                        disabled: busy !== '',
-                        onClick: () => void removeEvent(event)
-                      }, t('yes')),
-                      h('button', {
-                        type: 'button',
-                        className: 'dsh-calendar-button',
-                        onClick: () => setConfirmId('')
-                      }, t('no'))
-                    )
-                    : h('button', {
-                      type: 'button',
-                      className: 'dsh-calendar-button is-ghost',
-                      disabled: busy !== '',
-                      onClick: () => setConfirmId(event.id)
-                    }, t('deleteEvent'))
-                ))
-              )
-          ),
-          h(
-            'div',
-            { className: 'dsh-calendar-card' },
-            h(
-              'div',
-              { className: 'dsh-calendar-row' },
-              h('span', { className: 'dsh-calendar-label' }, t('timerTitle'))
-            ),
-            h(
-              'div',
-              { className: 'dsh-calendar-timer' },
-              h('span', { className: expired ? 'dsh-calendar-counter is-bad' : 'dsh-calendar-counter' }, formatCounter(counterSeconds)),
-              h('span', { className: 'dsh-calendar-hint' },
-                `${t('counterRemaining')} · ${t('counterElapsed')} ${formatCounter(elapsedSeconds)}${timer.mode === 'idle' ? '' : ` · ${timer.durationMin} ${t('minutesShort')}`}`)
-            ),
-            expired && timer.mode !== 'idle'
-              ? h('p', { className: 'dsh-calendar-note is-bad' },
-                timer.expired === true ? t('timerExpiredNotice') : t('timerFinishedNotice'))
-              : null,
-            h(
-              'div',
-              { className: 'dsh-calendar-row' },
-              modeButton('work', t('timerModeWork')),
-              modeButton('break', t('timerModeBreak')),
-              modeButton('custom', t('timerModeCustom')),
-              timerMode === 'custom'
-                ? h('input', {
-                  className: 'dsh-calendar-input is-number',
-                  type: 'number',
-                  min: 1,
-                  max: 720,
-                  title: t('customMinutesLabel'),
-                  value: customMinutes,
-                  disabled: busy !== '',
-                  onChange: event => setCustomMinutes(event.target.value)
-                })
-                : null
-            ),
-            h(
-              'div',
-              { className: 'dsh-calendar-row' },
-              h('input', {
-                className: 'dsh-calendar-input',
-                placeholder: t('labelPlaceholder'),
-                value: labelDraft,
-                disabled: busy !== '',
-                onChange: event => setLabelDraft(event.target.value)
-              }),
-              h('button', {
-                type: 'button',
-                className: bigAction.primary ? 'dsh-calendar-button is-primary' : 'dsh-calendar-button',
-                disabled: busy !== '',
-                onClick: () => void bigAction.run()
-              }, busy === 'timer' ? t('loading') : bigAction.label),
-              timer.mode !== 'idle'
-                ? h('button', {
-                  type: 'button',
-                  className: 'dsh-calendar-button is-danger',
-                  disabled: busy !== '',
-                  onClick: () => void stopTimer()
-                }, t('timerStopAction'))
-                : null
-            )
-          ),
-          h(
-            'div',
-            { className: 'dsh-calendar-card' },
-            h(
-              'div',
-              { className: 'dsh-calendar-row' },
-              h('span', { className: 'dsh-calendar-label' }, t('logTitle')),
-              h('span', { className: 'dsh-calendar-hint' }, `${t('logTotal')} ${durationText(logTotalSec, t)}`)
-            ),
-            entries.length === 0
-              ? h('p', { className: 'dsh-calendar-hint' }, t('logEmpty'))
-              : h(
-                'div',
-                { className: 'dsh-calendar-log' },
-                entries.map(entry => h(
-                  'div',
-                  { key: entry.id, className: 'dsh-calendar-log-item' },
-                  h('span', { className: 'dsh-calendar-event-time' }, `${entry.startTime}–${entry.endTime}`),
-                  h('span', { className: 'dsh-calendar-event-title' }, entry.label),
-                  h('span', { className: 'dsh-calendar-event-meta' }, durationText(entry.durationSec, t)),
-                  h('span', { className: 'dsh-calendar-badge' }, entry.source === 'manual' ? t('logSourceManual') : t('logSourceTimer'))
-                ))
+                { className: 'dsh-calendar-stats' },
+                statCard('is-events', CalendarIcon, t('statsEvents'), String(events.length)),
+                statCard('is-done', CheckIcon, t('statsDone'), String(doneCount)),
+                statCard('is-time', ClockIcon, t('statsTracked'), durationText(logTotalSec, t)),
+                statCard('is-count', ListIcon, t('statsRecords'), String(entries.length))
               ),
-            h('span', { className: 'dsh-calendar-hint' }, t('logAddTitle')),
-            h(
-              'div',
-              { className: 'dsh-calendar-form' },
-              h('input', {
-                className: 'dsh-calendar-input',
-                placeholder: t('logLabelPlaceholder'),
-                value: logDraft.label,
-                disabled: busy !== '',
-                onChange: event => setLogDraft({ ...logDraft, label: event.target.value })
-              }),
-              h('input', {
-                className: 'dsh-calendar-input is-number',
-                type: 'number',
-                min: 1,
-                max: 1440,
-                title: t('logMinutesPlaceholder'),
-                placeholder: t('logMinutesPlaceholder'),
-                value: logDraft.minutes,
-                disabled: busy !== '',
-                onChange: event => setLogDraft({ ...logDraft, minutes: event.target.value })
-              }),
-              h('button', {
-                type: 'button',
-                className: 'dsh-calendar-button is-primary',
-                disabled: busy !== '' || logDraft.label.trim() === '' || !(Number(logDraft.minutes) > 0),
-                onClick: () => void addLog()
-              }, busy === 'log' ? t('logAdding') : t('logAddButton'))
-            )
-          ),
-          h(
-            'div',
-            { className: 'dsh-calendar-card' },
-            h(
-              'div',
-              { className: 'dsh-calendar-row' },
-              h('span', { className: 'dsh-calendar-label' }, t('reportTitle')),
-              h('button', {
-                type: 'button',
-                className: range === 'today' ? 'dsh-calendar-button is-primary' : 'dsh-calendar-button',
-                onClick: () => showReport('today')
-              }, t('rangeToday')),
-              h('button', {
-                type: 'button',
-                className: range === 'week' ? 'dsh-calendar-button is-primary' : 'dsh-calendar-button',
-                onClick: () => showReport('week')
-              }, t('rangeWeek'))
-            ),
-            activeReport === null
-              ? h('p', { className: 'dsh-calendar-hint' }, t('loading'))
-              : h(
+              h(
                 'div',
-                { className: 'dsh-calendar-bars' },
-                h('div', { className: 'dsh-calendar-row' },
-                  h('span', { className: 'dsh-calendar-hint' },
-                    `${t('reportTotal')} ${durationText(activeReport.totalSec, t)} · ${t('reportEntriesCount')} ${activeReport.count}`)),
-                reportLabels.length === 0
-                  ? h('p', { className: 'dsh-calendar-hint' }, t('reportEmpty'))
-                  : reportLabels.map(row => h(
-                    'div',
-                    { key: row.label, className: 'dsh-calendar-bar-row' },
-                    h(
-                      'div',
-                      { className: 'dsh-calendar-bar-head' },
-                      h('span', { className: 'dsh-calendar-bar-label' }, row.label),
-                      h('span', { className: 'dsh-calendar-bar-value' },
-                        `${durationText(row.durationSec, t)} · ${Math.round((Number(row.share) || 0) * 100)}%`)
-                    ),
-                    h('div', { className: 'dsh-calendar-bar-track' },
-                      h('div', {
-                        className: 'dsh-calendar-bar-fill',
-                        style: { width: `${Math.max(2, Math.round((Number(row.share) || 0) * 100))}%` }
-                      }))
-                  ))
+                { className: 'dsh-calendar-layout' },
+                h('div', { className: 'dsh-calendar-col' }, todayCard, reportCard),
+                h('div', { className: 'dsh-calendar-col' }, timerCard, logCard)
               )
             )
           )
-        )
-        )
         );
       }
 

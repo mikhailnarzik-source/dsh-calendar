@@ -19,10 +19,10 @@ async function exists(relative) {
   await access(join(ROOT, relative))
 }
 
-test('package.json: bundle-патч, клиент, версия 0.2.0 и экспорты ресурсов', async () => {
+test('package.json: bundle-патч, клиент, версия 0.2.2 и экспорты ресурсов', async () => {
   const manifest = await readJson('package.json')
   assert.equal(manifest.name, 'dsh-calendar')
-  assert.equal(manifest.version, '0.2.0')
+  assert.equal(manifest.version, '0.2.2')
   assert.equal(manifest.private, true)
   assert.equal(manifest.type, 'module')
   assert.equal(manifest.dsh?.bundle?.patch, './cordis.patch.yml')
@@ -173,6 +173,7 @@ test('README и docs/DETAIL.md: инструкция для новичка, ин
     'недел',
     'левой панели',
     '0.2.0',
+    '0.2.2',
   ]) {
     assert.ok(readme.includes(marker), `README содержит «${marker}»`)
   }

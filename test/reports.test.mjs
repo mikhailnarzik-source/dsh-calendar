@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { appendLog, addManualLog, emptyState } from '../lib/storage.mjs'
-import { entriesInRange, reportFor, summarize, summaryFor } from '../lib/reports.mjs'
+import { entriesInRange, reportFor, summarize, summaryFor, weekDayBuckets } from '../lib/reports.mjs'
 import { localMoment } from './helpers.mjs'
 
 /** Wednesday inside the week of Monday 2026-01-12. */
@@ -96,4 +96,25 @@ test('отчёты: неизвестный диапазон читается к�
   const report = summaryFor(state, 'month', NOW)
   assert.equal(report.range, 'today')
   assert.equal(report.totalSec, 3000)
+})
+
+test('отчёты: дни недели для мини-бар-чарта — с понедельника, сегодня помечено', () => {
+  const state = stateWithLog()
+  const days = weekDayBuckets(state, NOW)
+  assert.equal(days.length, 7, 'семь дней недели')
+  assert.equal(days[0].date, '2026-01-12', 'первый день — понедельник')
+  assert.equal(days[6].date, '2026-01-18', 'последний — воскресенье')
+  assert.deepEqual(days.map(day => day.weekday), [0, 1, 2, 3, 4, 5, 6])
+  // Понедельник 3600 с, среда (сегодня) 1800 + 1200; прошлая неделя не считается.
+  assert.equal(days[0].durationSec, 3600)
+  assert.equal(days[2].durationSec, 3000)
+  assert.equal(days[2].isToday, true)
+  assert.equal(days.filter(day => day.isToday === true).length, 1, 'сегодня помечено ровно один день')
+  assert.equal(days.reduce((sum, day) => sum + day.durationSec, 0), summaryFor(state, 'week', NOW).totalSec,
+    'сумма столбиков равна недельному отчёту')
+
+  const summary = summaryFor(state, 'today', NOW)
+  assert.equal(summary.days.length, 7, 'дни недели приходят и в отчёте за сегодня')
+  assert.equal(summary.days[2].durationSec, 3000)
+  assert.equal(reportFor(state, 'week', NOW).days.length, 7)
 })
